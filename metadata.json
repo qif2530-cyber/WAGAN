@@ -1,0 +1,6 @@
+{
+  "name": "Overseas API Proxy Gateway",
+  "description": "A proxy gateway for overriding domestic blocking, allowing Alibaba Cloud servers to directly request Google Gemini Native APIs (Text, Images, Video) with simple password authentication.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
