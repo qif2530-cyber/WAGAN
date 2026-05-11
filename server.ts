@@ -429,6 +429,10 @@ app.post("/api/admin/config", requireAuth, (req, res) => {
 app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async (req, res) => {
   try {
     let { model, prompt } = req.body;
+    
+    // 映射模型名称
+    model = mapModelName(model);
+
     if (!prompt || !model) return res.status(400).json({ error: "缺少 prompt 或 model 参数 (Missing prompt or model)" });
 
     // 标准化尺寸识别 (Standardize size recognition)
@@ -717,8 +721,8 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
     }
 
     // 模型映射处理 (Model Mapping)
-    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast') || model.includes('gemini-2.5-flash-image'))) {
-        model = "gemini-3.1-flash-image-preview";
+    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast') || model.includes('gemini-2.5-flash-image') || model.includes('gemini-3.'))) {
+        model = "imagen-3.0-generate-001";
     }
 
     // Gemini 图像路线 (Imagen / Nano Banana)
@@ -793,7 +797,10 @@ app.get("/api/video", (req, res) => {
 
 app.post(["/v1/chat/completions", "/api/v1/chat/completions", "/v1/v1/chat/completions"], requireAuth, async (req, res) => {
   try {
-    const { model, messages, temperature, max_tokens, stream } = req.body;
+    let { model, messages, temperature, max_tokens, stream } = req.body;
+    
+    // 映射模型名称
+    model = mapModelName(model);
     
     // 如果是 gemini 模型，转换为 gemini 格式并调用
     if (model && model.includes('gemini')) {
@@ -881,6 +888,9 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
   try {
     let { prompt, model = "dall-e-3", n = 1, size = "1024x1024", response_format = "url" } = req.body;
     
+    // 映射模型名称
+    model = mapModelName(model);
+    
     // 标准化尺寸识别 (Standardize size recognition)
     const rawSize = (req.body.size || req.body.imageSize || req.body.image_size || '1024x1024').toString().toLowerCase();
     let geminiImageSize = '1K';
@@ -891,7 +901,7 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
 
     // 模型映射处理 (Model Mapping)
     if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast'))) {
-      model = "gemini-3.1-flash-image-preview";
+      model = "imagen-3.0-generate-001";
     }
 
     // OpenAI 尺寸规范化 (DALL-E 3 仅支持 1024 或 1792)
@@ -924,8 +934,8 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
           else if (h > w) reqAspectRatio = "3:4";
       }
 
-      if (model.includes("imagen-") || model.includes("gemini-2.5-flash-image") || model.includes("gemini-3-pro-image-preview")) {
-          model = "gemini-3.1-flash-image-preview";
+      if (model.includes("imagen-") || model.includes("gemini-2.5-flash-image") || model.includes("gemini-3.")) {
+          model = "imagen-3.0-generate-001";
       }
 
       const contents: any[] = [{ role: 'user', parts: [] }];
@@ -1168,8 +1178,8 @@ app.post("/api/image", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
 
     console.log(`[API] Image Generation requesting model: ${model}, aspect: ${aspectRatio}`);
 
-    if (model.includes("imagen-") || model.includes("gemini-2.5-flash-image") || model.includes("imagen-3.0")) {
-        model = "gemini-3.1-flash-image-preview";
+    if (model.includes("imagen-") || model.includes("gemini-2.5-flash-image") || model.includes("imagen-3.0") || model.includes("gemini-3.")) {
+        model = "imagen-3.0-generate-001";
     }
 
     // 重组请求包体 (支持垫图输入)
