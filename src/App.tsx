@@ -116,8 +116,16 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ApiType>('chat');
   
   // Playground state
-  const [password, setPassword] = useState('');
-  const [settingsPassword, setSettingsPassword] = useState('');
+  const [password, setPassword] = useState(() => localStorage.getItem('wagan_password') || '');
+  
+  useEffect(() => {
+    localStorage.setItem('wagan_password', password);
+  }, [password]);
+  const [settingsPassword, setSettingsPassword] = useState(() => localStorage.getItem('wagan_settings_password') || '');
+  
+  useEffect(() => {
+    localStorage.setItem('wagan_settings_password', settingsPassword);
+  }, [settingsPassword]);
   const [prompt, setPrompt] = useState('你好，请用中文介绍你是由哪家公司开发的模型？');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [imageSize, setImageSize] = useState('1K'); // 增加正式的 state 绑定
@@ -418,7 +426,7 @@ export default function App() {
 
   const handleTest = async () => {
     if (!password) {
-      setError("请先输入您的私有网关鉴权口令 (同 Secrets 里的 PROXY_SECRET_KEY / liangshan 值)");
+      setError("请先输入您的私有网关鉴权口令 (同 Secrets 里的 PROXY_SECRET_KEY 值)");
       return;
     }
     setLoading(true);
@@ -685,7 +693,7 @@ export default function App() {
                           style={{ WebkitTextSecurity: 'disc' }}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="例如：liangshan"
+                          placeholder="请输入您的私有网关密钥"
                           name="gateway_secret_key_prevent_autofill"
                           autoComplete="new-password"
                           readOnly
