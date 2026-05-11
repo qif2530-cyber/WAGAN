@@ -16,10 +16,13 @@ echo "📦 正在安装依赖并构建前端..."
 npm install
 npm run build
 
-# 3. 清理环境
-echo "🧹 清理旧进程与端口占用..."
 pm2 stop ai-gateway 2>/dev/null || true
 pm2 delete ai-gateway 2>/dev/null || true
+
+# 更强力的清理旧进程与端口占用
+echo "🧹 清理旧进程与端口占用..."
+sudo fuser -k 3000/tcp 2>/dev/null || true
+sudo lsof -t -i :3000 | xargs -r sudo kill -9 2>/dev/null || true
 npx -y kill-port 3000 2>/dev/null || true
 
 # 4. 启动服务 (PM2)

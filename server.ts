@@ -721,32 +721,57 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
     }
 
     // 模型映射处理 (Model Mapping)
-    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast') || model.includes('gemini-2.5-flash-image') || model.includes('gemini-3.'))) {
+    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast'))) {
         model = "imagen-3.0-generate-001";
     }
 
     // Gemini 图像路线 (Imagen / Nano Banana)
     if (model.includes('imagen') || model.includes('image')) {
-       // 组装逻辑与原版保持一致
-       const contents: any[] = [{ role: 'user', parts: [{ text: prompt }] }];
-       if (req.body.referenceImage) {
-           const { mimeType, data } = parseDataUri(req.body.referenceImage);
-           contents[0].parts.unshift({ inlineData: { mimeType, data } });
+       let rawBase64 = null;
+       const ai = getAI();
+       
+       if (model.includes('imagen')) {
+           // Imagen 系列使用 generateImages
+           const response = await ai.models.generateImages({
+               model: model,
+               prompt: prompt,
+               config: {
+                   numberOfImages: 1,
+                   outputMimeType: 'image/jpeg',
+                   aspectRatio: req.body.aspectRatio || "1:1"
+               }
+           });
+           rawBase64 = response.generatedImages?.[0]?.image?.imageBytes;
+       } else {
+           // Nano Banana 系列使用 generateContent
+           const contents: any[] = [{ role: 'user', parts: [{ text: prompt }] }];
+           if (req.body.referenceImage) {
+               const { mimeType, data } = parseDataUri(req.body.referenceImage);
+               contents[0].parts.unshift({ inlineData: { mimeType, data } });
+           }
+           
+           const response = await ai.models.generateContent({
+             model: model,
+             contents: contents,
+             config: {
+               imageConfig: {
+                 aspectRatio: req.body.aspectRatio || "1:1",
+                 imageSize: req.body.imageSize || "1K"
+               }
+             }
+           });
+           
+           const parts = response.candidates?.[0]?.content?.parts;
+           if (parts) {
+               for (const part of parts) {
+                   if (part.inlineData) {
+                       rawBase64 = part.inlineData.data;
+                       break;
+                   }
+               }
+           }
        }
        
-       const ai = getAI();
-       const response = await ai.models.generateContent({
-         model: model,
-         contents: contents,
-         config: {
-           imageConfig: {
-             aspectRatio: req.body.aspectRatio || "1:1",
-             imageSize: req.body.imageSize || "1K"
-           }
-         }
-       });
-       
-       const rawBase64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
        const estimatedCostUsd = recordBillingLog('image', model, prompt, { imageCount: 1, resolution: '2K' }, req);
        
        return res.json({ success: true, imageUrl: rawBase64 ? `data:image/jpeg;base64,${rawBase64}` : null, estimatedCostUsd });
@@ -1272,9 +1297,6 @@ app.post("/api/video", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
       resolution = "1080p",
       personGeneration = "ALLOW_ALL"
     } = req.body;
-    
-    // 映射模型名称 (如有)
-    if (model.includes("veo-3.1")) model = "veo-2.0-generate-001";
     
     if (!prompt) return res.status(400).json({ error: "缺少 prompt 参数" });
 
