@@ -394,7 +394,7 @@ export default function App() {
       // Inject dynamically selected model
       payload.model = selectedModel;
       
-      if (['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab)) {
+      if (['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora', 'video'].includes(activeTab)) {
         payload.aspectRatio = aspectRatio;
         if (referenceImage) {
           payload.referenceImage = referenceImage;
@@ -757,7 +757,7 @@ export default function App() {
                           className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-none mb-3"
                         />
 
-                        {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax'].includes(activeTab) && (
+                        {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && (
                           <div className="mb-4">
                             <label className="block text-xs font-medium text-gray-400 mb-2">垫图/参考图上传 (Reference Image - 可选)</label>
                             <div className="relative group">
@@ -793,15 +793,15 @@ export default function App() {
                           </div>
                         )}
 
-                        {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax'].includes(activeTab) && (
+                        {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora', 'video'].includes(activeTab) && (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                             
-                            {/* Aspect Ratio - For Gemini, MJ, Flux */}
-                            {['image', 'midjourney', 'fluxpro', 'fluxmax'].includes(activeTab) && (
+                            {/* Aspect Ratio - Common for most image/video models */}
+                            {['image', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora', 'video'].includes(activeTab) && (
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3">
-                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">图片长宽比 (Aspect Ratio)</label>
+                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">图片/视频比例 (Aspect Ratio)</label>
                                 <div className="flex flex-wrap gap-2">
-                                  {['1:1', '16:9', '9:16', '4:3', '3:4', '21:9', '2:3'].map((ratio) => (
+                                  {['1:1', '16:9', '9:16', '4:3', '3:4'].map((ratio) => (
                                     <button
                                       key={ratio}
                                       onClick={() => setAspectRatio(ratio)}
@@ -811,17 +811,16 @@ export default function App() {
                                     </button>
                                   ))}
                                 </div>
-                                {activeTab === 'midjourney' && <p className="mt-2 text-[10px] text-gray-500">Midjourney 通过参数 --ar 控制比例映射。它没有直接的固定分辨率概念。</p>}
                               </div>
                             )}
 
-                            {/* Image Size - For DALL-E */}
-                            {['dalle'].includes(activeTab) && (
+                            {/* Resolution - Specific for Jimeng/Flux/Dalle */}
+                            {['dalle', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && (
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3">
-                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Image Size)</label>
-                                <div className="flex gap-2">
-                                  {selectedModel === 'dall-e-3' ? (
-                                    ['1024x1024', '1024x1792', '1792x1024'].map((size) => (
+                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Resolution)</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {activeTab === 'dalle' ? (
+                                     ['1024x1024', '1024x1792', '1792x1024'].map((size) => (
                                       <button
                                         key={size}
                                         onClick={() => setImageSize(size)}
@@ -831,56 +830,19 @@ export default function App() {
                                       </button>
                                     ))
                                   ) : (
-                                    ['256', '512', '1024'].map((size) => (
+                                    ['1K', '2K', '4K'].map((size) => (
                                       <button
                                         key={size}
                                         onClick={() => setImageSize(size)}
-                                        className={`flex-1 py-1.5 text-[10px] font-mono rounded border transition-colors cursor-pointer ${imageSize === size ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
+                                        className={`flex-1 min-w-[30%] py-1.5 text-[10px] font-mono rounded border transition-colors cursor-pointer ${imageSize === size ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
                                       >
-                                        {size === '1024' ? '1024x1024' : `${size}x${size}`}
+                                        {size}
                                       </button>
                                     ))
                                   )}
                                 </div>
                               </div>
                             )}
-                            {['fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && (
-                              <div className="bg-black/30 border border-white/5 rounded-lg p-3">
-                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Image Size)</label>
-                                <div className="flex flex-wrap gap-2">
-                                  {['1K', '2K', '4K'].map((size) => (
-                                    <button
-                                      key={size}
-                                      onClick={() => setImageSize(size)}
-                                      className={`flex-1 min-w-[30%] py-1.5 text-[10px] font-mono rounded border transition-colors cursor-pointer ${imageSize === size ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
-                                    >
-                                      {size}
-                                    </button>
-                                  ))}
-                                </div>
-                                <p className="mt-2 text-[10px] text-gray-500">已启用动态比例重算算法。支持各规格下发。</p>
-                              </div>
-                            )}
-
-                            {/* Image Size - For Gemini */}
-                            {['image'].includes(activeTab) && (
-                              <div className="bg-black/30 border border-white/5 rounded-lg p-3">
-                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Image Size)</label>
-                                <div className="flex gap-2">
-                                  {['1K', '2K', '4K'].map((size) => (
-                                    <button
-                                      key={size}
-                                      onClick={() => setImageSize(size)}
-                                      className={`flex-1 py-1.5 text-[10px] font-mono rounded border transition-colors cursor-pointer ${imageSize === size ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
-                                    >
-                                      {size}
-                                    </button>
-                                  ))}
-                                </div>
-                                <p className="mt-1 text-[8px] text-gray-600 leading-none">警告：4K传输可能过大导致超时。</p>
-                              </div>
-                            )}
-
                           </div>
                         )}
 
