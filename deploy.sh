@@ -22,16 +22,40 @@ fuser -k 3000/tcp 2>/dev/null || true
 
 # 4. 启动服务 (PM2)
 echo "🔄 启动 PM2 后端服务..."
-# 针对 TypeScript + ESM 最稳妥的 PM2 启动方式
-NODE_ENV=production pm2 start "npx tsx server.ts" --name ai-gateway
 
-# 5. 验证状态
-echo "⏳ 等待启动..."
-sleep 3
+# 先检查是否有旧进程并彻底杀掉
+pm2 stop ai-gateway 2>/dev/null || true
+pm2 delete ai-gateway 2>/dev/null || true
+fuser -k 3000/tcp 2>/dev/null || true
+
+# 使用 tsx 直接启动，并显式指定环境变量
+# 这样 PM2 可以更好地监控进程，而不是监控 npx 包装器
+NODE_ENV=production pm2 start ./node_modules/.bin/tsx --name ai-gateway -- server.ts
+
+# 5. 验证与诊断
+echo "⏳ 等待 5 秒检测启动状态..."
+sleep 5
+
+echo "🔍 正在检查 3000 端口监听状态..."
+if netstat -tpln | grep :3000; then
+    echo "✅ 3000 端口已正常监听！"
+else
+    echo "❌ 警告：3000 端口未见监听。可能启动失败了。"
+fi
+
+echo "📂 检查构建产物..."
+if [ -f "dist/index.html" ]; then
+    echo "✅ dist/index.html 已就绪。"
+else
+    echo "❌ 错误：dist 目录不存在或为空，前端访问将 404。"
+fi
+
+echo "📋 PM2 实时日志快照 (最后 20 行)："
+pm2 logs ai-gateway --lines 20 --no-colors --inline
+
+echo "📊 当前 PM2 状态："
 pm2 status ai-gateway
-
-echo "📋 日志快照："
-pm2 logs ai-gateway --lines 15 --no-colors --inline
 
 echo "✅ 部署指令执行完成！"
 echo "🌐 服务地址: http://localhost:3000"
+echo "💡 如果远程无法访问，请检查阿里云『安全组』是否放行 3000 端口。"

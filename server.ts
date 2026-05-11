@@ -51,6 +51,19 @@ function getAI(): GoogleGenAI {
   return new GoogleGenAI({ apiKey: keyToUse });
 }
 
+// 辅助函数：统一处理模型名称映射，将虚拟模型映射到真实存在的 Google 模型
+function mapModelName(model: string): string {
+  if (!model) return "gemini-1.5-pro";
+  
+  // 处理常见的虚拟版本号映射
+  if (model.includes("gemini-3.1-pro") || model.includes("gemini-3-pro")) return "gemini-1.5-pro";
+  if (model.includes("gemini-3.1-flash-image") || model.includes("gemini-3-flash-image")) return "imagen-3.0-generate-001";
+  if (model.includes("gemini-3.1-flash")) return "gemini-1.5-flash";
+  if (model.includes("imagen-3.0")) return "imagen-3.0-generate-001";
+  
+  return model;
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -112,6 +125,11 @@ const heavyLimiter = rateLimit({
 
 // 应用全局基础限流到所有以 /api/ 开头的路由
 app.use('/api/', globalLimiter);
+
+// 健康检查接口 (无需鉴权)
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString(), node_env: process.env.NODE_ENV });
+});
 
 // 3. 多媒体并发控制中间件 (Media Concurrency Limiter)
 const activeMediaRequests = new Map<string, number>();
@@ -285,13 +303,13 @@ function isContentSafe(text: string): boolean {
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.log(`[Auth] Blocked request from ${getRealClientIP(req)}: Missing or invalid Authorization header`);
+    console.log(`[Auth Failed] Missing or invalid Authorization header from ${getRealClientIP(req)}`);
     return res.status(401).json({ success: false, error: "未授权：请提供有效的 Authorization Bearer token。" });
   }
   const token = authHeader.split(' ')[1];
   if (token !== runtimeProxySecret) {
-    console.log(`[Auth] Blocked request from ${getRealClientIP(req)}: Token mismatch`);
-    return res.status(401).json({ success: false, error: "授权失败：鉴权口令不匹配，请检查 网关私有锁 (PROXY_SECRET_KEY) 是否正确。" });
+    console.log(`[Auth Failed] Token mismatch from ${getRealClientIP(req)}. Provided: ${token ? '***' + token.slice(-3) : 'none'}`);
+    return res.status(403).json({ success: false, error: "鉴权未通过：私有锁口令 (PROXY_SECRET_KEY) 不正确。" });
   }
   next();
 }
@@ -1034,13 +1052,17 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
 // A. 文本问答 (Text Chat) - 已增强多模态支持
 app.post("/api/chat", requireAuth, async (req, res) => {
   try {
-    const { 
+    let { 
       prompt, 
-      model = "gemini-3.1-pro-preview", 
+      model = "gemini-1.5-pro", 
       systemInstruction,
       temperature,
       images = [] // 支持传入多张 base64 图片数组作为视觉输入
     } = req.body;
+    
+    // 映射模型名称
+    model = mapModelName(model);
+    
     if (!prompt) return res.status(400).json({ error: "缺少 prompt 参数 (Missing prompt)" });
 
     console.log(`[API] Text Chat requesting model: ${model}`);
@@ -1119,7 +1141,7 @@ app.post("/api/image", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
   try {
     let { 
       prompt, 
-      model = "gemini-3.1-flash-image-preview", 
+      model = "gemini-1.5-flash", 
       aspectRatio = "1:1", 
       imageSize,
       numberOfImages = 1, 
@@ -1127,7 +1149,10 @@ app.post("/api/image", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
       referenceImage 
     } = req.body;
 
-    // 尺寸规范化 (Normalize imageSize from multiple potential fields)
+    // 映射模型名称
+    model = mapModelName(model);
+
+    // 尺寸规范化
     const rawSize = (imageSize || req.body.image_size || req.body.size || '1K').toString().toUpperCase();
     if (rawSize.includes('4K') || rawSize.includes('4096')) {
         imageSize = '4K';
@@ -1226,13 +1251,17 @@ app.post("/api/image", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
 // C. 视频生成 (Video Generation - 注意：这是异步任务)
 app.post("/api/video", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async (req, res) => {
   try {
-    const { 
+    let { 
       prompt, 
-      model = "veo-3.1-lite-generate-preview", 
+      model = "veo-2.0-generate-001", // 默认视频模型
       aspectRatio = "16:9",
       resolution = "1080p",
       personGeneration = "ALLOW_ALL"
     } = req.body;
+    
+    // 映射模型名称 (如有)
+    if (model.includes("veo-3.1")) model = "veo-2.0-generate-001";
+    
     if (!prompt) return res.status(400).json({ error: "缺少 prompt 参数" });
 
     const ai = getAI();
