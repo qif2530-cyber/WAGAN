@@ -4,9 +4,10 @@ set -e
 # Universal AI Gateway - 自动化部署脚本
 echo "🚀 开始自动化部署程序..."
 
-# 1. 强制同步远程代码 (注意：如果你在服务器上手动修改了此脚本，会被覆盖)
-# 如果你想保留本地修改，请注释掉下面两行
-echo "📥 正在从远程同步代码..."
+# 1. 安全地同步远程代码
+# 注意：git fetch 和 git reset --hard origin/main 只会覆盖被 Git 跟踪的代码文件。
+# 它【不会】删除你服务器上未被跟踪的文件（比如 .env 配置文件、本地的 sqlite 数据库文件等），所以非常安全。
+echo "📥 正在从远程同步代码 (保留本地 .env 及数据库)..."
 git fetch --all
 git reset --hard origin/main
 
