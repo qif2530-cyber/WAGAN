@@ -1,65 +1,44 @@
 #!/bin/bash
-set -e
+# 注意：此脚本在全新服务器上执行即可，或者在 WAGAN 目录下也可以。
 
-# Universal AI Gateway - 自动化部署脚本
-echo "🚀 开始自动化部署程序..."
+echo "==========================================="
+echo "   🚀 WAGAN 网关 - 阿里云一键部署脚本"
+echo "==========================================="
 
-# 1. 安全地同步远程代码
-# 注意：git fetch 和 git reset --hard origin/main 只会覆盖被 Git 跟踪的代码文件。
-# 它【不会】删除你服务器上未被跟踪的文件（比如 .env 配置文件、本地的 sqlite 数据库文件等），所以非常安全。
-echo "📥 正在从远程同步代码 (保留本地 .env 及数据库)..."
-git fetch --all
-git reset --hard origin/main
+echo "➡️ [1/6] 更新系统包..."
+sudo apt-get update -y
 
-# 2. 安装并构建
-echo "📦 正在安装依赖并构建前端..."
-npm install
+echo "➡️ [2/6] 安装 Node.js 及必要工具..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs git
+
+echo "➡️ [3/6] 安装进程守护工具 PM2..."
+sudo npm install -g pm2 --registry=https://registry.npmmirror.com
+
+echo "➡️ [4/6] 克隆代码与依赖安装..."
+# 检测是否已经在仓库目录内
+if [ ! -d ".git" ]; then
+    git clone https://gitee.com/jepow/WAGAN.git
+    cd WAGAN
+fi
+
+echo ">> 安装依赖 (使用淘宝镜像加速)..."
+npm install --registry=https://registry.npmmirror.com
+
+echo "➡️ [5/6] 编译前端产物..."
 npm run build
 
-pm2 stop ai-gateway 2>/dev/null || true
-pm2 delete ai-gateway 2>/dev/null || true
+echo "➡️ [6/6] 启动 PM2 守护进程..."
+# 使用 pm2 启动并设置环境变量 PROXY_SECRET_KEY
+PROXY_SECRET_KEY=liangshan PORT=3000 pm2 start "npm run start" --name wagan
 
-# 更强力的清理旧进程与端口占用
-echo "🧹 清理旧进程与端口占用..."
-sudo fuser -k 3000/tcp 2>/dev/null || true
-sudo lsof -t -i :3000 | xargs -r sudo kill -9 2>/dev/null || true
-pkill -f "server.ts" 2>/dev/null || true
-pkill -f "ai-gateway" 2>/dev/null || true
-npx -y kill-port 3000 2>/dev/null || true
+# 写入自启脚本
+pm2 save
+pm2 startup
 
-# 4. 启动服务 (PM2)
-echo "🔄 启动 PM2 后端服务..."
-
-# 理清之前的残留日志，防止看日志时被旧报错误导
-pm2 flush ai-gateway 2>/dev/null || true
-
-# 使用 npx tsx 直连启动，避免 npm 脚本产生孤儿进程
-NODE_ENV=production pm2 start npx --name ai-gateway -- tsx server.ts
-
-# 5. 验证与诊断
-echo "⏳ 等待 5 秒检测启动状态..."
-sleep 5
-
-echo "🔍 正在检查 3000 端口监听状态..."
-if netstat -tpln | grep :3000; then
-    echo "✅ 3000 端口已正常监听！"
-else
-    echo "❌ 警告：3000 端口未见监听。可能启动失败了。"
-fi
-
-echo "📂 检查构建产物..."
-if [ -f "dist/index.html" ]; then
-    echo "✅ dist/index.html 已就绪。"
-else
-    echo "❌ 错误：dist 目录不存在或为空，前端访问将 404。"
-fi
-
-echo "📋 PM2 实时日志快照 (最后 20 行)："
-pm2 logs ai-gateway --lines 20 --nostream
-
-echo "📊 当前 PM2 状态："
-pm2 status ai-gateway
-
-echo "✅ 部署指令执行完成！"
-echo "🌐 服务地址: http://localhost:3000"
-echo "💡 如果远程无法访问，请检查阿里云『安全组』是否放行 3000 端口。"
+echo "==========================================="
+echo "✅ 部署完成！"
+echo "🌐 网关默认运行端口: 3000"
+echo "🔐 您的鉴权密钥: liangshan"
+echo "⚠️ 请确保阿里云安全组已经放行 3000 端口！"
+echo "==========================================="
