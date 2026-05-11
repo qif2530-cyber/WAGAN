@@ -6,9 +6,10 @@
 
 echo "🚀 开始执行自动化部署更新..."
 
-# 1. 拉取最新代码
-echo "📥 正在从 Gitee 拉取最新代码..."
-git pull origin main
+# 1. 强制同步远程代码
+echo "📥 正在强制从 Gitee 同步最新代码..."
+git fetch --all
+git reset --hard origin/main
 
 # 2. 安装依赖 (使用 npm 或 pnpm)
 echo "📦 正在安装依赖..."
