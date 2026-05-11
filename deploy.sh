@@ -18,21 +18,15 @@ npm run build
 
 # 3. 清理环境
 echo "🧹 清理旧进程与端口占用..."
+pm2 stop ai-gateway 2>/dev/null || true
 pm2 delete ai-gateway 2>/dev/null || true
-sudo fuser -k 3000/tcp 2>/dev/null || true
-sudo kill -9 $(sudo lsof -t -i:3000) 2>/dev/null || true
+npx -y kill-port 3000 2>/dev/null || true
 
 # 4. 启动服务 (PM2)
 echo "🔄 启动 PM2 后端服务..."
 
-# 先检查是否有旧进程并彻底杀掉
-pm2 stop ai-gateway 2>/dev/null || true
-pm2 delete ai-gateway 2>/dev/null || true
-sudo fuser -k 3000/tcp 2>/dev/null || true
-sudo kill -9 $(sudo lsof -t -i:3000) 2>/dev/null || true
-
-# 使用 npm run start 启动
-NODE_ENV=production pm2 start npm --name ai-gateway -- run start
+# 使用 npx tsx 直连启动，避免 npm 脚本产生孤儿进程
+NODE_ENV=production pm2 start npx --name ai-gateway -- tsx server.ts
 
 # 5. 验证与诊断
 echo "⏳ 等待 5 秒检测启动状态..."
