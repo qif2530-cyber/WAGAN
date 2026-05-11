@@ -25,6 +25,9 @@ npx -y kill-port 3000 2>/dev/null || true
 # 4. 启动服务 (PM2)
 echo "🔄 启动 PM2 后端服务..."
 
+# 理清之前的残留日志，防止看日志时被旧报错误导
+pm2 flush ai-gateway 2>/dev/null || true
+
 # 使用 npx tsx 直连启动，避免 npm 脚本产生孤儿进程
 NODE_ENV=production pm2 start npx --name ai-gateway -- tsx server.ts
 
