@@ -23,6 +23,8 @@ pm2 delete ai-gateway 2>/dev/null || true
 echo "🧹 清理旧进程与端口占用..."
 sudo fuser -k 3000/tcp 2>/dev/null || true
 sudo lsof -t -i :3000 | xargs -r sudo kill -9 2>/dev/null || true
+pkill -f "server.ts" 2>/dev/null || true
+pkill -f "ai-gateway" 2>/dev/null || true
 npx -y kill-port 3000 2>/dev/null || true
 
 # 4. 启动服务 (PM2)

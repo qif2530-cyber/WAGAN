@@ -721,7 +721,7 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
     }
 
     // 模型映射处理 (Model Mapping)
-    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast'))) {
+    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast') || model.includes('gemini-2.5-flash-image') || model.includes('gemini-3.'))) {
         model = "imagen-3.0-generate-001";
     }
 
@@ -1298,6 +1298,11 @@ app.post("/api/video", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
       personGeneration = "ALLOW_ALL"
     } = req.body;
     
+    // 模型映射
+    if (model && model.includes('veo-3.1')) {
+        model = "veo-2.0-generate-001";
+    }
+    
     if (!prompt) return res.status(400).json({ error: "缺少 prompt 参数" });
 
     const ai = getAI();
@@ -1307,8 +1312,9 @@ app.post("/api/video", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
       prompt: prompt,
       config: {
         numberOfVideos: 1,
-        resolution: resolution,
-        aspectRatio: aspectRatio
+        // resolution removed since 1080p causes invalid argument error
+        aspectRatio: aspectRatio,
+        personGeneration: personGeneration // 如果有需要
       }
     });
 
