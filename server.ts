@@ -36,6 +36,10 @@ let runtimeMidjourneyKey = process.env.MIDJOURNEY_API_KEY || "";
 let runtimeMidjourneyBaseUrl = process.env.MIDJOURNEY_BASE_URL || "";
 let runtimeFluxKey = process.env.FLUX_API_KEY || "";
 let runtimeFluxBaseUrl = process.env.FLUX_BASE_URL || "";
+let runtimeJimengKey = process.env.JIMENG_API_KEY || "";
+let runtimeJimengBaseUrl = process.env.JIMENG_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
+let runtimeKlingKey = process.env.KLING_API_KEY || "";
+let runtimeKlingBaseUrl = process.env.KLING_BASE_URL || "https://api.klingai.com/v1";
 let runtimeMjMode: 'openai' | 'task' = (process.env.MJ_MODE as any) || 'openai';
 let runtimeProxySecret = process.env.PROXY_SECRET_KEY || "liangshan";
 
@@ -333,13 +337,17 @@ app.get("/api/admin/config", requireAuth, (req, res) => {
     midjourneyBaseUrl: runtimeMidjourneyBaseUrl,
     fluxKey: runtimeFluxKey ? `${runtimeFluxKey.substring(0, 4)}****${runtimeFluxKey.substring(runtimeFluxKey.length - 4)}` : "",
     fluxBaseUrl: runtimeFluxBaseUrl,
+    jimengKey: runtimeJimengKey ? `${runtimeJimengKey.substring(0, 4)}****${runtimeJimengKey.substring(runtimeJimengKey.length - 4)}` : "",
+    jimengBaseUrl: runtimeJimengBaseUrl,
+    klingKey: runtimeKlingKey ? `${runtimeKlingKey.substring(0, 4)}****${runtimeKlingKey.substring(runtimeKlingKey.length - 4)}` : "",
+    klingBaseUrl: runtimeKlingBaseUrl,
     mjMode: runtimeMjMode
   });
 });
 
 app.post("/api/admin/config", requireAuth, (req, res) => {
   console.log(`[Admin] Received config update request from ${getRealClientIP(req)}`);
-  const { whitelist, geminiKey, openaiKey, openaiBaseUrl, midjourneyKey, midjourneyBaseUrl, fluxKey, fluxBaseUrl, mjMode } = req.body;
+  const { whitelist, geminiKey, openaiKey, openaiBaseUrl, midjourneyKey, midjourneyBaseUrl, fluxKey, fluxBaseUrl, jimengKey, jimengBaseUrl, klingKey, klingBaseUrl, mjMode } = req.body;
   if (whitelist !== undefined) {
     runtimeWhitelist = whitelist.split(',').map((ip: string) => ip.trim()).filter((ip: string) => ip.length > 0);
   }
@@ -364,6 +372,18 @@ app.post("/api/admin/config", requireAuth, (req, res) => {
   if (fluxBaseUrl !== undefined) {
     runtimeFluxBaseUrl = fluxBaseUrl.trim();
   }
+  if (jimengKey && !jimengKey.includes("****")) {
+    runtimeJimengKey = jimengKey;
+  }
+  if (jimengBaseUrl !== undefined) {
+    runtimeJimengBaseUrl = jimengBaseUrl.trim();
+  }
+  if (klingKey && !klingKey.includes("****")) {
+    runtimeKlingKey = klingKey;
+  }
+  if (klingBaseUrl !== undefined) {
+    runtimeKlingBaseUrl = klingBaseUrl.trim();
+  }
   if (mjMode !== undefined) {
     runtimeMjMode = mjMode;
   }
@@ -378,6 +398,10 @@ app.post("/api/admin/config", requireAuth, (req, res) => {
     midjourneyBaseUrl: runtimeMidjourneyBaseUrl,
     fluxKey: runtimeFluxKey ? `${runtimeFluxKey.substring(0, 4)}****${runtimeFluxKey.substring(runtimeFluxKey.length - 4)}` : "",
     fluxBaseUrl: runtimeFluxBaseUrl,
+    jimengKey: runtimeJimengKey ? `${runtimeJimengKey.substring(0, 4)}****${runtimeJimengKey.substring(runtimeJimengKey.length - 4)}` : "",
+    jimengBaseUrl: runtimeJimengBaseUrl,
+    klingKey: runtimeKlingKey ? `${runtimeKlingKey.substring(0, 4)}****${runtimeKlingKey.substring(runtimeKlingKey.length - 4)}` : "",
+    klingBaseUrl: runtimeKlingBaseUrl,
     mjMode: runtimeMjMode
   });
 });
@@ -573,6 +597,105 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
        const estimatedCostUsd = recordBillingLog('chat', model, prompt, { inputTokens: inTokens, outputTokens: outTokens }, req);
        
        return res.json({ success: true, text: response.choices[0]?.message?.content || "", estimatedCostUsd, raw: response });
+    }
+
+    // 即梦 Jimeng (图像)
+    if (model.includes('jimeng') && !model.includes('video')) {
+       const API_KEY = runtimeJimengKey;
+       const BASE_URL = runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+       if (!API_KEY) throw new Error(`网关未配置即梦 (JIMENG) 所需的 API Key`);
+
+       const response = await fetch(`${BASE_URL}/images/generations`, {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${API_KEY}`
+           },
+           body: JSON.stringify({
+               model: model,
+               prompt: prompt,
+               size: targetSize
+           })
+       });
+
+       const data = await response.json();
+       if (!response.ok) throw new Error(data.error?.message || JSON.stringify(data));
+
+       const imageUrl = data.data?.[0]?.url || data.url;
+       const estimatedCostUsd = recordBillingLog('image', model, prompt, { imageCount: 1, resolution: targetSize }, req);
+       return res.json({ success: true, imageUrl, estimatedCostUsd, raw: data });
+    }
+
+    // 可灵 Kling AI / 即梦 Jimeng (视频)
+    if (model.includes('kling') || (model.includes('jimeng') && model.includes('video'))) {
+       const isKling = model.includes('kling');
+       const API_KEY = isKling ? runtimeKlingKey : runtimeJimengKey;
+       const BASE_URL = isKling ? (runtimeKlingBaseUrl || "https://api.klingai.com/v1") : (runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3");
+       
+       if (!API_KEY) throw new Error(`网关未配置 ${isKling ? '可灵 (KLING)' : '即梦 (JIMENG)'} 所需的 API Key`);
+
+       let submitUrl = isKling ? `${BASE_URL}/videos/text2video` : `${BASE_URL}/video/generations`;
+       let submitBody: any = isKling ? {
+           model: model,
+           prompt: prompt
+       } : {
+           model: model,
+           prompt: prompt
+       };
+
+       const submitResponse = await fetch(submitUrl, {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${API_KEY}`
+           },
+           body: JSON.stringify(submitBody)
+       });
+
+       const submitData = await submitResponse.json();
+       if (!submitResponse.ok) throw new Error(submitData.error?.message || JSON.stringify(submitData));
+
+       const taskId = isKling ? submitData.data?.task_id : submitData.id || submitData.task_id;
+       if (!taskId) throw new Error("未能获取任务 ID (Task ID not found)");
+
+       console.log(`[Unified Gateway] Domestic Video Task submitted: ${taskId}. Polling...`);
+
+       let finalVideoUrl = "";
+       let startTime = Date.now();
+       const TIMEOUT = 300000; // 5分钟
+
+       while (Date.now() - startTime < TIMEOUT) {
+           await new Promise(r => setTimeout(r, 10000)); // 10秒轮询
+           
+           let pollUrl = isKling ? `${BASE_URL}/videos/text2video/${taskId}` : `${BASE_URL}/video/tasks/${taskId}`;
+           
+           // 处理部分中转网关可能使用的不同路径
+           if (isKling && (runtimeJimengBaseUrl?.includes('api.klingai.com') === false)) {
+               // 如果不是直接调用官网，可能路径是 /tasks/
+               pollUrl = `${BASE_URL}/videos/tasks/${taskId}`;
+           }
+
+           const pollResponse = await fetch(pollUrl, {
+               headers: { 'Authorization': `Bearer ${API_KEY}` }
+           });
+           const pollData = await pollResponse.json();
+
+           const status = isKling ? (pollData.data?.task_status || pollData.status) : (pollData.status || (pollData.data && pollData.data.status));
+           const resultVideoUrl = isKling ? (pollData.data?.task_result?.videos?.[0]?.url || pollData.video_url) : (pollData.video_url || pollData.url || (pollData.data && (pollData.data.url || pollData.data.video_url)));
+
+           if ((status === 'SUCCESS' || status === 'completed' || status === 'done' || status === 'succeeded') && resultVideoUrl) {
+               finalVideoUrl = resultVideoUrl;
+               break;
+           } else if (status === 'FAILURE' || status === 'failed') {
+               throw new Error(`生成失败: ${pollData.error?.message || '任务状态异常'}`);
+           }
+           console.log(`[Unified Gateway] Domestic Video Task ${taskId} status: ${status}...`);
+       }
+
+       if (!finalVideoUrl) throw new Error("视频任务超时或未返回结果 (Task Timeout)");
+
+       const estimatedCostUsd = recordBillingLog('video', model, prompt, { resolution: '720p' }, req);
+       return res.json({ success: true, videoUrl: finalVideoUrl, estimatedCostUsd, raw: { taskId } });
     }
 
     // 模型映射处理 (Model Mapping)

@@ -29,7 +29,7 @@ const CodeBlock = ({ title, code }: { title: string, code: string }) => {
   );
 }
 
-type ApiType = 'chat' | 'image' | 'video' | 'openai' | 'dalle' | 'midjourney' | 'fluxpro' | 'fluxmax' | 'sora' | 'docs' | 'billing' | 'settings' | 'error-logs';
+type ApiType = 'chat' | 'image' | 'video' | 'openai' | 'dalle' | 'midjourney' | 'fluxpro' | 'fluxmax' | 'jimeng-image' | 'jimeng-video' | 'kling-video' | 'sora' | 'docs' | 'billing' | 'settings' | 'error-logs';
 
 const MODEL_INFO: Record<string, { name: string, desc: string, docUrl: string, method: string }> = {
   chat: {
@@ -80,6 +80,24 @@ const MODEL_INFO: Record<string, { name: string, desc: string, docUrl: string, m
     docUrl: "https://blackforestlabs.ai/",
     method: "flux-2-max"
   },
+  'jimeng-image': {
+    name: "即梦 Jimeng (生图)",
+    desc: "抖音/字节跳动旗下即梦 (Dreamina) 旗舰级图像生成模型。",
+    docUrl: "https://www.volcengine.com/docs/82989/1218556",
+    method: "jimeng-5.0"
+  },
+  'jimeng-video': {
+    name: "即梦 Jimeng (生视频)",
+    desc: "即梦 (Dreamina) 视频生成模型，支持高质量动态画面创作。",
+    docUrl: "https://www.volcengine.com/product/dreamina",
+    method: "jimeng-2.0"
+  },
+  'kling-video': {
+    name: "可灵 Kling AI (生视频)",
+    desc: "快手旗下旗舰级视频生成大模型，支持超长时长与高度连贯性。",
+    docUrl: "https://klingai.com/",
+    method: "kling-3.0"
+  },
   sora: {
     name: "OpenAI Sora (生视频)",
     desc: "OpenAI 文本到视频生成模型，提供超现实的高清运镜和连贯的视频创作体验",
@@ -114,6 +132,10 @@ export default function App() {
   const [adminMidjourneyBaseUrl, setAdminMidjourneyBaseUrl] = useState<string>('');
   const [adminFluxKey, setAdminFluxKey] = useState<string>('');
   const [adminFluxBaseUrl, setAdminFluxBaseUrl] = useState<string>('');
+  const [adminJimengKey, setAdminJimengKey] = useState<string>('');
+  const [adminJimengBaseUrl, setAdminJimengBaseUrl] = useState<string>('');
+  const [adminKlingKey, setAdminKlingKey] = useState<string>('');
+  const [adminKlingBaseUrl, setAdminKlingBaseUrl] = useState<string>('');
   const [adminMjMode, setAdminMjMode] = useState<'openai' | 'task'>('openai');
   const [configSaved, setConfigSaved] = useState<boolean>(false);
   const [isSettingsUnlocked, setIsSettingsUnlocked] = useState<boolean>(false);
@@ -217,6 +239,22 @@ export default function App() {
       setPrompt('Hyper-realistic majestic dragon soaring through a thunderstorm, dramatic lighting');
       setSelectedModel('flux-2-max');
     }
+    if (tab === 'jimeng-image') {
+      setPrompt('唯美古风，一位红衣少女漫步在盛开的桃花林中，精细绝伦，8k，电影感。');
+      setSelectedModel('jimeng-5.0');
+    }
+    if (tab === 'jimeng-video') {
+      setPrompt('电影级镜头，壮阔的云海翻腾，夕阳照耀在雪山之巅，4k，极其震撼。');
+      setSelectedModel('jimeng-2.0');
+    }
+    if (tab === 'kling-video') {
+      setPrompt('一个人在雨中漫步的特写镜头，雨滴打在雨伞上，高度写实，连贯动作。');
+      setSelectedModel('kling-3.0');
+    }
+    if (tab === 'sora') {
+      setPrompt('Cinematic shot of a bright red panda taking a sip of hot tea on a snowy mountain.');
+      setSelectedModel('sora');
+    }
   }
 
   const fetchBilling = async () => {
@@ -309,6 +347,10 @@ export default function App() {
           midjourneyBaseUrl: adminMidjourneyBaseUrl,
           fluxKey: adminFluxKey,
           fluxBaseUrl: adminFluxBaseUrl,
+          jimengKey: adminJimengKey,
+          jimengBaseUrl: adminJimengBaseUrl,
+          klingKey: adminKlingKey,
+          klingBaseUrl: adminKlingBaseUrl,
           mjMode: adminMjMode
         })
       });
@@ -322,6 +364,10 @@ export default function App() {
         setAdminMidjourneyBaseUrl(data.midjourneyBaseUrl || "");
         setAdminFluxKey(data.fluxKey || "");
         setAdminFluxBaseUrl(data.fluxBaseUrl || "");
+        setAdminJimengKey(data.jimengKey || "");
+        setAdminJimengBaseUrl(data.jimengBaseUrl || "");
+        setAdminKlingKey(data.klingKey || "");
+        setAdminKlingBaseUrl(data.klingBaseUrl || "");
         setAdminMjMode(data.mjMode || 'openai');
         setConfigSaved(true);
         setTimeout(() => setConfigSaved(false), 3000);
@@ -348,7 +394,7 @@ export default function App() {
       // Inject dynamically selected model
       payload.model = selectedModel;
       
-      if (['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax'].includes(activeTab)) {
+      if (['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab)) {
         payload.aspectRatio = aspectRatio;
         if (referenceImage) {
           payload.referenceImage = referenceImage;
@@ -385,7 +431,7 @@ export default function App() {
       }
 
       let endpoint = `/api/${activeTab}`;
-      if (['dalle', 'midjourney', 'fluxpro', 'fluxmax', 'sora'].includes(activeTab)) {
+      if (['dalle', 'midjourney', 'fluxpro', 'fluxmax', 'sora', 'jimeng-image', 'jimeng-video', 'kling-video'].includes(activeTab)) {
         endpoint = '/api/v1/generate';
       }
 
@@ -477,28 +523,46 @@ export default function App() {
               <ImageIcon className="w-4 h-4" /> Flux 2 Pro
             </button>
             <button
-              onClick={() => changeTab('fluxmax')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'fluxmax' ? 'bg-indigo-500/15 text-indigo-400 font-medium border border-indigo-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
-            >
-              <ImageIcon className="w-4 h-4" /> Flux 2 Max
-            </button>
-          </div>
+               onClick={() => changeTab('fluxmax')}
+               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'fluxmax' ? 'bg-indigo-500/15 text-indigo-400 font-medium border border-indigo-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+             >
+               <ImageIcon className="w-4 h-4" /> Flux 2 Max
+             </button>
+             <button
+               onClick={() => changeTab('jimeng-image')}
+               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'jimeng-image' ? 'bg-rose-500/15 text-rose-400 font-medium border border-rose-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+             >
+               <ImageIcon className="w-4 h-4" /> 即梦 Jimeng (生图)
+             </button>
+           </div>
 
-          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-3">视频创作</div>
-          <div className="space-y-1 mb-8">
-            <button
-              onClick={() => changeTab('video')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'video' ? 'bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
-            >
-              <Video className="w-4 h-4" /> Veo 生视频
-            </button>
-            <button
-              onClick={() => changeTab('sora')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'sora' ? 'bg-indigo-500/15 text-indigo-400 font-medium border border-indigo-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
-            >
-              <Video className="w-4 h-4" /> Sora 生视频
-            </button>
-          </div>
+           <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-3">视频创作</div>
+           <div className="space-y-1 mb-8">
+             <button
+               onClick={() => changeTab('video')}
+               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'video' ? 'bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+             >
+               <Video className="w-4 h-4" /> Veo 生视频
+             </button>
+             <button
+               onClick={() => changeTab('jimeng-video')}
+               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'jimeng-video' ? 'bg-rose-500/15 text-rose-400 font-medium border border-rose-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+             >
+               <Video className="w-4 h-4" /> 即梦 (生视频)
+             </button>
+             <button
+               onClick={() => changeTab('kling-video')}
+               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'kling-video' ? 'bg-orange-500/15 text-orange-400 font-medium border border-orange-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+             >
+               <Video className="w-4 h-4" /> 可灵 Kling (生视频)
+             </button>
+             <button
+               onClick={() => changeTab('sora')}
+               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'sora' ? 'bg-indigo-500/15 text-indigo-400 font-medium border border-indigo-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+             >
+               <Video className="w-4 h-4" /> Sora 生视频
+             </button>
+           </div>
 
           <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-3 mt-auto border-t border-white/5 pt-6">开发对接体系</div>
           <div className="space-y-1 mb-6">
@@ -531,7 +595,7 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 py-6 pl-8 overflow-y-auto">
-          {['chat', 'image', 'video', 'openai', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'sora'].includes(activeTab) ? (
+          {['chat', 'image', 'video', 'openai', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora'].includes(activeTab) ? (
             <div className="animate-in fade-in duration-300 h-full flex flex-col">
               
               {/* Header card for the selected model */}
@@ -622,10 +686,40 @@ export default function App() {
                               </button>
                             </div>
                           )}
-                          {activeTab === 'fluxmax' && (
+                           {activeTab === 'fluxmax' && (
                             <div className="flex gap-2">
                               <button onClick={() => setSelectedModel('flux-2-max')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'flux-2-max' ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
                                 Flux 2 Max
+                              </button>
+                            </div>
+                          )}
+                          {activeTab === 'jimeng-image' && (
+                            <div className="flex gap-2">
+                              <button onClick={() => setSelectedModel('jimeng-5.0')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'jimeng-5.0' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                即梦 5.0 (最新)
+                              </button>
+                              <button onClick={() => setSelectedModel('jimeng-4.5')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'jimeng-4.5' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                即梦 4.5
+                              </button>
+                            </div>
+                          )}
+                          {activeTab === 'jimeng-video' && (
+                            <div className="flex gap-2">
+                              <button onClick={() => setSelectedModel('jimeng-2.0')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'jimeng-2.0' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                即梦 2.0 (视频)
+                              </button>
+                            </div>
+                          )}
+                          {activeTab === 'kling-video' && (
+                            <div className="flex flex-wrap gap-2">
+                              <button onClick={() => setSelectedModel('kling-3.0')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-3.0' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                可灵 3.0
+                              </button>
+                              <button onClick={() => setSelectedModel('kling-o1')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-o1' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                可灵 O1
+                              </button>
+                              <button onClick={() => setSelectedModel('kling-o3')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-o3' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                可灵 O3
                               </button>
                             </div>
                           )}
@@ -737,23 +831,20 @@ export default function App() {
                                       </button>
                                     ))
                                   ) : (
-                                    ['256', '512', '1K'].map((size) => (
+                                    ['256', '512', '1024'].map((size) => (
                                       <button
                                         key={size}
-                                        onClick={() => setImageSize(size === '1K' ? '1024' : size)}
-                                        className={`flex-1 py-1.5 text-[10px] font-mono rounded border transition-colors cursor-pointer ${(imageSize === size || (imageSize === '1024' && size === '1K')) ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
+                                        onClick={() => setImageSize(size)}
+                                        className={`flex-1 py-1.5 text-[10px] font-mono rounded border transition-colors cursor-pointer ${imageSize === size ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
                                       >
-                                        {size === '1K' ? '1024x1024' : `${size}x${size}`}
+                                        {size === '1024' ? '1024x1024' : `${size}x${size}`}
                                       </button>
                                     ))
                                   )}
                                 </div>
-                                <p className="mt-2 text-[10px] text-gray-500">DALL-E 3 支持长条像素，GPT-Image 2 / DALL-E 2 仅支持正方形。</p>
                               </div>
                             )}
-
-                            {/* Image Size - For Flux */}
-                            {['fluxpro', 'fluxmax'].includes(activeTab) && (
+                            {['fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && (
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3">
                                 <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Image Size)</label>
                                 <div className="flex flex-wrap gap-2">
@@ -767,7 +858,7 @@ export default function App() {
                                     </button>
                                   ))}
                                 </div>
-                                <p className="mt-2 text-[10px] text-gray-500">已启用动态比例重算算法 (Aspect Ratio Auto-Scaler)。支持1K/2K/4K规格下发。</p>
+                                <p className="mt-2 text-[10px] text-gray-500">已启用动态比例重算算法。支持各规格下发。</p>
                               </div>
                             )}
 
@@ -841,7 +932,7 @@ export default function App() {
                             </div>
                           )}
 
-                          {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax'].includes(activeTab) && result.imageUrl && (
+                          {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && result.imageUrl && (
                             <div className="w-full flex flex-col items-center">
                               <div className="relative group">
                                 <div className="flex justify-center bg-black/40 rounded-xl p-4 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.1)] w-full">
@@ -868,7 +959,7 @@ export default function App() {
                             </div>
                           )}
 
-                          {['sora', 'video'].includes(activeTab) && (result.videoUrl || result.videoUri) && (
+                          {['sora', 'video', 'jimeng-video', 'kling-video'].includes(activeTab) && (result.videoUrl || result.videoUri) && (
                             <div className="flex justify-center bg-black/40 rounded-xl p-4 border border-indigo-500/20 shadow-[0_0_30px_rgba(99,102,241,0.1)] w-full">
                               <video src={result.videoUrl || result.videoUri} controls autoPlay loop className="max-w-full h-auto rounded-lg shadow-lg object-contain max-h-[500px]" />
                             </div>
@@ -1588,6 +1679,46 @@ image_url = response.data[0].url`}
                           placeholder="例如：https://api.flux-proxy.com/v1"
                         />
                         <p className="text-xs text-gray-500">注：通过国内统一中转网关调用时填写，需兼容 OpenAI 接口规范。</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">即梦 Jimeng (Dreamina) API Key</label>
+                        <input 
+                          type="text"
+                          value={adminJimengKey}
+                          onChange={(e) => setAdminJimengKey(e.target.value)}
+                          className="w-full bg-black border border-white/20 rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-rose-500 font-mono"
+                          placeholder="Volcengine Ark (火山引擎) API Key"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">即梦 Jimeng Base URL</label>
+                        <input 
+                          type="text"
+                          value={adminJimengBaseUrl}
+                          onChange={(e) => setAdminJimengBaseUrl(e.target.value)}
+                          className="w-full bg-black border border-white/20 rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-rose-500 font-mono"
+                          placeholder="例如：https://ark.cn-beijing.volces.com/api/v3"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">可灵 Kling AI API Key</label>
+                        <input 
+                          type="text"
+                          value={adminKlingKey}
+                          onChange={(e) => setAdminKlingKey(e.target.value)}
+                          className="w-full bg-black border border-white/20 rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-rose-500 font-mono"
+                          placeholder="Kling AI 官网获取的 API Key"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">可灵 Kling Base URL</label>
+                        <input 
+                          type="text"
+                          value={adminKlingBaseUrl}
+                          onChange={(e) => setAdminKlingBaseUrl(e.target.value)}
+                          className="w-full bg-black border border-white/20 rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-rose-500 font-mono"
+                          placeholder="例如：https://api.klingai.com/v1"
+                        />
                       </div>
                     </div>
                   </div>
