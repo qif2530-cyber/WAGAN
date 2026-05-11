@@ -28,9 +28,8 @@ pm2 stop ai-gateway 2>/dev/null || true
 pm2 delete ai-gateway 2>/dev/null || true
 fuser -k 3000/tcp 2>/dev/null || true
 
-# 使用 tsx 直接启动，并显式指定环境变量
-# 这样 PM2 可以更好地监控进程，而不是监控 npx 包装器
-NODE_ENV=production pm2 start ./node_modules/.bin/tsx --name ai-gateway -- server.ts
+# 使用 npm run start 启动
+NODE_ENV=production pm2 start npm --name ai-gateway -- run start
 
 # 5. 验证与诊断
 echo "⏳ 等待 5 秒检测启动状态..."
@@ -51,7 +50,7 @@ else
 fi
 
 echo "📋 PM2 实时日志快照 (最后 20 行)："
-pm2 logs ai-gateway --lines 20 --no-colors --inline
+pm2 logs ai-gateway --lines 20 --nostream
 
 echo "📊 当前 PM2 状态："
 pm2 status ai-gateway
