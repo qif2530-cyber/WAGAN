@@ -1024,14 +1024,18 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
     } = req.body;
     
     // 重新构造符合标准 OpenAI 格式的 body
-    const finalBody = {
+    const finalBody: any = {
         ...openaiBody,
         model: model,
         prompt: prompt,
         n: n,
-        size: size,
-        response_format: response_format
+        size: size
     };
+    
+    // 兼容部分 API (如 SiliconFlow/矩阵) 不支持 response_format 的情况
+    if (response_format && response_format !== 'url') {
+        finalBody.response_format = response_format;
+    }
 
     const response = await fetch(`${BASE_URL}/images/generations`, {
         method: 'POST',
