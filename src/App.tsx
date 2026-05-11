@@ -29,7 +29,7 @@ const CodeBlock = ({ title, code }: { title: string, code: string }) => {
   );
 }
 
-type ApiType = 'chat' | 'image' | 'video' | 'openai' | 'dalle' | 'midjourney' | 'fluxpro' | 'fluxmax' | 'jimeng-image' | 'jimeng-video' | 'kling-video' | 'sora' | 'docs' | 'billing' | 'settings' | 'error-logs';
+type ApiType = 'chat' | 'image' | 'video' | 'openai' | 'deepseek' | 'dalle' | 'midjourney' | 'fluxpro' | 'fluxmax' | 'jimeng-image' | 'jimeng-video' | 'kling-video' | 'sora' | 'docs' | 'billing' | 'settings' | 'error-logs';
 
 const MODEL_INFO: Record<string, { name: string, desc: string, docUrl: string, method: string }> = {
   chat: {
@@ -56,6 +56,12 @@ const MODEL_INFO: Record<string, { name: string, desc: string, docUrl: string, m
     docUrl: "https://platform.openai.com/docs/api-reference",
     method: "gpt-4o-mini"
   },
+  deepseek: {
+    name: "DeepSeek Text (问答)",
+    desc: "深度求索开源/闭源模型集，支持深度推理 (deepseek-reasoner) 和通用聊天 (deepseek-chat)。",
+    docUrl: "https://platform.deepseek.com/docs",
+    method: "deepseek-reasoner"
+  },
   dalle: {
     name: "DALL-E / GPT Image (生图)",
     desc: "OpenAI 图像生成模型",
@@ -81,22 +87,22 @@ const MODEL_INFO: Record<string, { name: string, desc: string, docUrl: string, m
     method: "flux-2-max"
   },
   'jimeng-image': {
-    name: "即梦 Jimeng (生图)",
-    desc: "抖音/字节跳动旗下即梦 (Dreamina) 旗舰级图像生成模型。",
+    name: "即梦/豆包 (生图)",
+    desc: "火山引擎旗下即梦/豆包 Seedream 旗舰级图像生成模型。",
     docUrl: "https://www.volcengine.com/docs/82989/1218556",
-    method: "jimeng-5.0"
+    method: "doubao-seedream-5.0-lite"
   },
   'jimeng-video': {
     name: "即梦 Jimeng (生视频)",
-    desc: "即梦 (Dreamina) 视频生成模型，支持高质量动态画面创作。",
+    desc: "即梦 (Dreamina) 视频生成模型 Seedance。",
     docUrl: "https://www.volcengine.com/product/dreamina",
-    method: "jimeng-2.0"
+    method: "doubao-seedance-2.0"
   },
   'kling-video': {
     name: "可灵 Kling AI (生视频)",
     desc: "快手旗下旗舰级视频生成大模型，支持超长时长与高度连贯性。",
     docUrl: "https://klingai.com/",
-    method: "kling-3.0"
+    method: "kling-v3"
   },
   sora: {
     name: "OpenAI Sora (生视频)",
@@ -115,8 +121,12 @@ export default function App() {
   const [prompt, setPrompt] = useState('你好，请用中文介绍你是由哪家公司开发的模型？');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [imageSize, setImageSize] = useState('1K'); // 增加正式的 state 绑定
+  const [videoResolution, setVideoResolution] = useState('720p');
+  const [videoDuration, setVideoDuration] = useState(5);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceImageName, setReferenceImageName] = useState<string | null>(null);
+  const [referenceImageTail, setReferenceImageTail] = useState<string | null>(null);
+  const [referenceImageTailName, setReferenceImageTailName] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro-preview');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -136,6 +146,8 @@ export default function App() {
   const [adminJimengBaseUrl, setAdminJimengBaseUrl] = useState<string>('');
   const [adminKlingKey, setAdminKlingKey] = useState<string>('');
   const [adminKlingBaseUrl, setAdminKlingBaseUrl] = useState<string>('');
+  const [adminDeepseekKey, setAdminDeepseekKey] = useState("");
+  const [adminDeepseekBaseUrl, setAdminDeepseekBaseUrl] = useState("");
   const [adminMjMode, setAdminMjMode] = useState<'openai' | 'task'>('openai');
   const [configSaved, setConfigSaved] = useState<boolean>(false);
   const [isSettingsUnlocked, setIsSettingsUnlocked] = useState<boolean>(false);
@@ -167,6 +179,23 @@ export default function App() {
     const reader = new FileReader();
     reader.onloadend = () => {
       setReferenceImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleTailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("图片大小不能超过 5MB");
+      return;
+    }
+
+    setReferenceImageTailName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setReferenceImageTail(reader.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -223,6 +252,10 @@ export default function App() {
       setPrompt('你好，你是 OpenAI 还是 Google？');
       setSelectedModel('gpt-4o-mini');
     }
+    if (tab === 'deepseek') {
+      setPrompt('9.11 and 9.8 which is greater? Please solve it step by step.');
+      setSelectedModel('deepseek-reasoner');
+    }
     if (tab === 'dalle') {
       setPrompt('一只可爱的柴犬穿着宇航服在火星表面漫步，高清晰度，电影级光影');
       setSelectedModel('gpt-image-2');
@@ -240,16 +273,16 @@ export default function App() {
       setSelectedModel('flux-2-max');
     }
     if (tab === 'jimeng-image') {
-      setPrompt('唯美古风，一位红衣少女漫步在盛开的桃花林中，精细绝伦，8k，电影感。');
-      setSelectedModel('jimeng-5.0');
+      setPrompt('充满活力的特写编辑肖像，模特眼神犀利，头戴雕塑感帽子，色彩拼接丰富，眼部焦点锐利，景深较浅。');
+      setSelectedModel('doubao-seedream-5.0-lite');
     }
     if (tab === 'jimeng-video') {
       setPrompt('电影级镜头，壮阔的云海翻腾，夕阳照耀在雪山之巅，4k，极其震撼。');
-      setSelectedModel('jimeng-2.0');
+      setSelectedModel('doubao-seedance-2.0');
     }
     if (tab === 'kling-video') {
       setPrompt('一个人在雨中漫步的特写镜头，雨滴打在雨伞上，高度写实，连贯动作。');
-      setSelectedModel('kling-3.0');
+      setSelectedModel('kling-v3');
     }
     if (tab === 'sora') {
       setPrompt('Cinematic shot of a bright red panda taking a sip of hot tea on a snowy mountain.');
@@ -351,6 +384,8 @@ export default function App() {
           jimengBaseUrl: adminJimengBaseUrl,
           klingKey: adminKlingKey,
           klingBaseUrl: adminKlingBaseUrl,
+          deepseekKey: adminDeepseekKey,
+          deepseekBaseUrl: adminDeepseekBaseUrl,
           mjMode: adminMjMode
         })
       });
@@ -368,6 +403,8 @@ export default function App() {
         setAdminJimengBaseUrl(data.jimengBaseUrl || "");
         setAdminKlingKey(data.klingKey || "");
         setAdminKlingBaseUrl(data.klingBaseUrl || "");
+        setAdminDeepseekKey(data.deepseekKey || "");
+        setAdminDeepseekBaseUrl(data.deepseekBaseUrl || "");
         setAdminMjMode(data.mjMode || 'openai');
         setConfigSaved(true);
         setTimeout(() => setConfigSaved(false), 3000);
@@ -399,6 +436,9 @@ export default function App() {
         if (referenceImage) {
           payload.referenceImage = referenceImage;
         }
+        if (referenceImageTail) {
+          payload.referenceImageTail = referenceImageTail;
+        }
         
         // ------------- 动态比例计算层 -------------
         let baseArea = 1024 * 1024;
@@ -429,9 +469,18 @@ export default function App() {
         payload.imageSize = imageSize; // '1K', '2K', '4K'
         payload.size = `${width}x${height}`;
       }
+      
+      if (['video', 'jimeng-video', 'kling-video', 'sora'].includes(activeTab)) {
+        payload.videoResolution = videoResolution;
+        payload.duration = videoDuration;
+      }
+      
+      payload.actionType = activeTab;
 
       let endpoint = `/api/${activeTab}`;
-      if (['dalle', 'midjourney', 'fluxpro', 'fluxmax', 'sora', 'jimeng-image', 'jimeng-video', 'kling-video'].includes(activeTab)) {
+      if (['deepseek'].includes(activeTab)) {
+        endpoint = '/api/openai';
+      } else if (['dalle', 'midjourney', 'fluxpro', 'fluxmax', 'sora', 'jimeng-image', 'jimeng-video', 'kling-video'].includes(activeTab)) {
         endpoint = '/api/v1/generate';
       }
 
@@ -494,6 +543,12 @@ export default function App() {
             >
               <Bot className="w-4 h-4" /> OpenAI GPT
             </button>
+            <button
+              onClick={() => changeTab('deepseek')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'deepseek' ? 'bg-blue-500/15 text-blue-400 font-medium border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+            >
+              <Bot className="w-4 h-4" /> DeepSeek
+            </button>
           </div>
 
           <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-3">图像创作</div>
@@ -532,7 +587,7 @@ export default function App() {
                onClick={() => changeTab('jimeng-image')}
                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'jimeng-image' ? 'bg-rose-500/15 text-rose-400 font-medium border border-rose-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
              >
-               <ImageIcon className="w-4 h-4" /> 即梦 Jimeng (生图)
+               <ImageIcon className="w-4 h-4" /> 字节火山引擎 (生图)
              </button>
            </div>
 
@@ -595,7 +650,7 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 py-6 pl-8 overflow-y-auto">
-          {['chat', 'image', 'video', 'openai', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora'].includes(activeTab) ? (
+          {['chat', 'image', 'video', 'openai', 'deepseek', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora'].includes(activeTab) ? (
             <div className="animate-in fade-in duration-300 h-full flex flex-col">
               
               {/* Header card for the selected model */}
@@ -695,31 +750,34 @@ export default function App() {
                           )}
                           {activeTab === 'jimeng-image' && (
                             <div className="flex gap-2">
-                              <button onClick={() => setSelectedModel('jimeng-5.0')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'jimeng-5.0' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                即梦 5.0 (最新)
+                              <button onClick={() => setSelectedModel('doubao-seedream-5.0-lite')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'doubao-seedream-5.0-lite' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                Seedream 5.0 Lite
                               </button>
-                              <button onClick={() => setSelectedModel('jimeng-4.5')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'jimeng-4.5' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                即梦 4.5
+                              <button onClick={() => setSelectedModel('doubao-seedream-4.5')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'doubao-seedream-4.5' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                Seedream 4.5
                               </button>
                             </div>
                           )}
                           {activeTab === 'jimeng-video' && (
                             <div className="flex gap-2">
-                              <button onClick={() => setSelectedModel('jimeng-2.0')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'jimeng-2.0' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                即梦 2.0 (视频)
+                              <button onClick={() => setSelectedModel('doubao-seedance-2.0')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'doubao-seedance-2.0' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                Seedance 2.0
+                              </button>
+                              <button onClick={() => setSelectedModel('doubao-seedance-2.0-fast')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'doubao-seedance-2.0-fast' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                Seedance 2.0 Fast
                               </button>
                             </div>
                           )}
                           {activeTab === 'kling-video' && (
                             <div className="flex flex-wrap gap-2">
-                              <button onClick={() => setSelectedModel('kling-3.0')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-3.0' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                可灵 3.0
-                              </button>
-                              <button onClick={() => setSelectedModel('kling-o1')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-o1' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                              <button onClick={() => setSelectedModel('kling-video-o1')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-video-o1' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
                                 可灵 O1
                               </button>
-                              <button onClick={() => setSelectedModel('kling-o3')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-o3' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                可灵 O3
+                              <button onClick={() => setSelectedModel('kling-v3-omni')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-v3-omni' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                可灵 v3 Omni
+                              </button>
+                              <button onClick={() => setSelectedModel('kling-v3')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-v3' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
+                                可灵 v3
                               </button>
                             </div>
                           )}
@@ -745,8 +803,32 @@ export default function App() {
                               <button onClick={() => setSelectedModel('gpt-4o')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'gpt-4o' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300'}`}>
                                 gpt-4o (旗舰版)
                               </button>
+                              <button onClick={() => setSelectedModel('o3-mini')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'o3-mini' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300'}`}>
+                                o3-mini (推理)
+                              </button>
                             </div>
                           )}
+                          {activeTab === 'deepseek' && (
+                            <div className="flex gap-2">
+                              <button onClick={() => setSelectedModel('deepseek-chat')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'deepseek-chat' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300'}`}>
+                                deepseek-chat
+                              </button>
+                              <button onClick={() => setSelectedModel('deepseek-reasoner')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'deepseek-reasoner' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300'}`}>
+                                deepseek-reasoner (深度推理)
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="block text-xs font-medium text-gray-400 mb-1">自定义模型名称 (如果上述没有，可手动输入 Endpoint 或模型 ID)</label>
+                          <input 
+                            type="text"
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                            placeholder="例如：ep-202410... 或 doubao-video..."
+                          />
                         </div>
 
                         <label className="block text-xs font-medium text-gray-400 mb-1">功能测试提示词 (Prompt)</label>
@@ -757,39 +839,77 @@ export default function App() {
                           className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-none mb-3"
                         />
 
-                        {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && (
-                          <div className="mb-4">
-                            <label className="block text-xs font-medium text-gray-400 mb-2">垫图/参考图上传 (Reference Image - 可选)</label>
-                            <div className="relative group">
-                              {!referenceImage ? (
-                                <div className="border-2 border-dashed border-white/10 rounded-xl p-4 transition-all hover:bg-white/5 hover:border-emerald-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer relative overflow-hidden">
-                                  <Upload className="w-6 h-6 text-gray-500 group-hover:text-emerald-400 transition-colors" />
-                                  <span className="text-[10px] text-gray-500 group-hover:text-gray-300">点击或通过拖拽上传 Base64 格式参考图</span>
-                                  <input 
-                                    type="file" 
-                                    accept="image/*" 
-                                    onChange={handleFileChange}
-                                    className="absolute inset-0 opacity-0 cursor-pointer" 
-                                  />
-                                </div>
-                              ) : (
-                                <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-3 flex items-center justify-between gap-3 animate-in fade-in zoom-in-95 duration-200">
-                                  <div className="flex items-center gap-3 overflow-hidden">
-                                    <img src={referenceImage} className="w-12 h-12 rounded object-cover border border-white/10" alt="Preview" />
-                                    <div className="overflow-hidden">
-                                      <p className="text-[10px] font-bold text-emerald-400 truncate">{referenceImageName}</p>
-                                      <p className="text-[8px] text-gray-500">已成功编码为 Base64。请求时将自动注入 payload。</p>
-                                    </div>
+                        {['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'kling-video'].includes(activeTab) && (
+                          <div className="mb-4 space-y-4">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-400 mb-2">首图/参考图上传 (Reference Image - 可选)</label>
+                              <div className="relative group">
+                                {!referenceImage ? (
+                                  <div className="border-2 border-dashed border-white/10 rounded-xl p-4 transition-all hover:bg-white/5 hover:border-emerald-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer relative overflow-hidden">
+                                    <Upload className="w-6 h-6 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                                    <span className="text-[10px] text-gray-500 group-hover:text-gray-300">点击或通过拖拽上传 Base64 格式参考图（首图）</span>
+                                    <input 
+                                      type="file" 
+                                      accept="image/*" 
+                                      onChange={handleFileChange}
+                                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                                    />
                                   </div>
-                                  <button 
-                                    onClick={() => { setReferenceImage(null); setReferenceImageName(null); }}
-                                    className="p-2 hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
+                                ) : (
+                                  <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-3 flex items-center justify-between gap-3 animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                      <img src={referenceImage} className="w-12 h-12 rounded object-cover border border-white/10" alt="Preview" />
+                                      <div className="overflow-hidden">
+                                        <p className="text-[10px] font-bold text-emerald-400 truncate">{referenceImageName}</p>
+                                        <p className="text-[8px] text-gray-500">已成功编码为 Base64。请求时将自动注入 payload。</p>
+                                      </div>
+                                    </div>
+                                    <button 
+                                      onClick={() => { setReferenceImage(null); setReferenceImageName(null); }}
+                                      className="p-2 hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
+                            
+                            {activeTab === 'kling-video' && (
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-2">尾图上传 (Reference Image Tail - 可选)</label>
+                                <div className="relative group">
+                                  {!referenceImageTail ? (
+                                    <div className="border-2 border-dashed border-white/10 rounded-xl p-4 transition-all hover:bg-white/5 hover:border-emerald-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer relative overflow-hidden">
+                                      <Upload className="w-6 h-6 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                                      <span className="text-[10px] text-gray-500 group-hover:text-gray-300">点击或通过拖拽上传 Base64 格式参考图（尾图）</span>
+                                      <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        onChange={handleTailFileChange}
+                                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-3 flex items-center justify-between gap-3 animate-in fade-in zoom-in-95 duration-200">
+                                      <div className="flex items-center gap-3 overflow-hidden">
+                                        <img src={referenceImageTail} className="w-12 h-12 rounded object-cover border border-white/10" alt="Preview" />
+                                        <div className="overflow-hidden">
+                                          <p className="text-[10px] font-bold text-emerald-400 truncate">{referenceImageTailName}</p>
+                                          <p className="text-[8px] text-gray-500">已成功编码为 Base64。请求时将自动注入 payload。</p>
+                                        </div>
+                                      </div>
+                                      <button 
+                                        onClick={() => { setReferenceImageTail(null); setReferenceImageTailName(null); }}
+                                        className="p-2 hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -843,6 +963,58 @@ export default function App() {
                                 </div>
                               </div>
                             )}
+
+                            {/* Video Resolution and Duration */}
+                            {['jimeng-video', 'kling-video'].includes(activeTab) && (
+                              <>
+                                <div className="bg-black/30 border border-white/5 rounded-lg p-3">
+                                  <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Video Resolution)</label>
+                                  <div className="flex flex-wrap gap-2">
+                                    {['480p', '720p', '1080p'].map((res) => {
+                                      // seedance 2.0 fast does not support 1080p
+                                      const isFast = selectedModel.includes('fast');
+                                      const disabled = isFast && res === '1080p';
+                                      const displayLabel = activeTab === 'kling-video' ? (res === '1080p' ? '1080p (Pro)' : (res === '720p' ? '720p (Std)' : res)) : res;
+                                      return (
+                                        <button
+                                          key={res}
+                                          onClick={() => !disabled && setVideoResolution(res)}
+                                          disabled={disabled}
+                                          className={`flex-1 py-1.5 text-[10px] font-mono rounded border transition-colors ${disabled ? 'opacity-30 cursor-not-allowed bg-black/40 border-white/5 text-gray-600' : videoResolution === res ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 cursor-pointer' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30 cursor-pointer'}`}
+                                        >
+                                          {displayLabel}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                <div className="bg-black/30 border border-white/5 rounded-lg p-3 md:col-span-2">
+                                  <div className="flex justify-between items-center mb-2">
+                                    <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider">生成时长 (Video Duration)</label>
+                                    <span className="text-xs text-indigo-400 font-mono">{videoDuration === -1 ? 'Auto' : `${videoDuration}s`}</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {activeTab === 'kling-video' ? [5, 10].map((duration) => (
+                                      <button
+                                        key={duration}
+                                        onClick={() => setVideoDuration(duration)}
+                                        className={`flex-1 py-1.5 text-xs rounded border transition-colors cursor-pointer ${videoDuration === duration ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
+                                      >
+                                        {duration} 秒
+                                      </button>
+                                    )) : [4, 5, 10, 15, -1].map((duration) => (
+                                      <button
+                                        key={duration}
+                                        onClick={() => setVideoDuration(duration)}
+                                        className={`flex-1 py-1.5 text-xs rounded border transition-colors cursor-pointer ${videoDuration === duration ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
+                                      >
+                                        {duration === -1 ? '智能选择' : `${duration} 秒`}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
 
@@ -882,7 +1054,17 @@ export default function App() {
                       {error && (
                         <div className="w-full bg-red-500/10 border border-red-500/20 rounded-xl p-5 text-sm text-red-400 mt-0 my-auto">
                           <h4 className="font-bold flex items-center gap-2 mb-2"><AlertTriangle className="w-4 h-4" /> 哎呀，请求受阻</h4>
-                          <p className="font-mono text-xs opacity-90 mt-1">{error}</p>
+                          <p className="font-mono text-xs opacity-90 mt-1 mb-2">{error}</p>
+                          {(error.includes('fetch failed') || error.includes('does not exist') || error.includes('access')) && (
+                            <div className="mt-3 text-xs bg-red-500/20 p-3 rounded-lg text-red-200">
+                              <strong>问题排查建议 (Troubleshooting):</strong>
+                              <ul className="list-disc pl-4 mt-2 mb-1 space-y-1">
+                                {error.includes('fetch failed') && <li>提示 fetch failed 表示无法连接到代理服务或API网关，请前往「设置(Settings)」检查 Base URL 域名和协议(http/https)是否填写正确。例如官方API为 https://api.klingai.com/v1</li>}
+                                {(error.includes('does not exist') || error.includes('access')) && <li>对于【火山引擎即梦】模型：报错表示必须使用您在控制台申请的 Endpoint ID 作为模型名称重试。请在左侧「自定义模型名称」输入框填入您的 <code>ep-xxxx</code> ID。<br/>对于【中转API网关/代理】：这通常意味着您的第三方 API 服务商未收录该模型别名或不支持该官方调度链路。</li>}
+                                {(error.includes('is not supported') || error.includes('Invalid model')) && <li>该报错表示服务器不识别该模型名称或不支持该接口链路。如有必要请使用代理网关提供的自定义模型名重试。</li>}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1680,6 +1862,36 @@ image_url = response.data[0].url`}
                           onChange={(e) => setAdminKlingBaseUrl(e.target.value)}
                           className="w-full bg-black border border-white/20 rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-rose-500 font-mono"
                           placeholder="例如：https://api.klingai.com/v1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DeepSeek */}
+                  <div className="bg-black/30 border border-white/5 rounded-2xl p-6">
+                    <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                      <span className="w-1.5 h-6 bg-blue-500 rounded-full inline-block"></span>
+                      DeepSeek 深度求索
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">DeepSeek API Key</label>
+                        <input 
+                          type="text"
+                          value={adminDeepseekKey}
+                          onChange={(e) => setAdminDeepseekKey(e.target.value)}
+                          className="w-full bg-black border border-white/20 rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-blue-500 font-mono"
+                          placeholder="DeepSeek 官方 API Key 或中转 Key"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">DeepSeek Base URL</label>
+                        <input 
+                          type="text"
+                          value={adminDeepseekBaseUrl}
+                          onChange={(e) => setAdminDeepseekBaseUrl(e.target.value)}
+                          className="w-full bg-black border border-white/20 rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-blue-500 font-mono"
+                          placeholder="例如：https://api.deepseek.com"
                         />
                       </div>
                     </div>

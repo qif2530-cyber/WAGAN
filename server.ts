@@ -7,6 +7,37 @@ import rateLimit from "express-rate-limit";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import compression from 'compression';
+import crypto from 'crypto';
+
+function generateKlingJwt(ak: string, sk: string) {
+    const header = { alg: "HS256", typ: "JWT" };
+    const payload = {
+        iss: ak,
+        exp: Math.floor(Date.now() / 1000) + 1800, // Valid for 30 mins
+        nbf: Math.floor(Date.now() / 1000) - 5
+    };
+    
+    const base64UrlEncode = (obj: any) => {
+        return Buffer.from(JSON.stringify(obj))
+            .toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+    };
+    
+    const encodedHeader = base64UrlEncode(header);
+    const encodedPayload = base64UrlEncode(payload);
+    
+    const signatureInput = `${encodedHeader}.${encodedPayload}`;
+    const signature = crypto.createHmac('sha256', sk)
+        .update(signatureInput)
+        .digest('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+        
+    return `${signatureInput}.${signature}`;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +71,8 @@ let runtimeJimengKey = process.env.JIMENG_API_KEY || "";
 let runtimeJimengBaseUrl = process.env.JIMENG_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
 let runtimeKlingKey = process.env.KLING_API_KEY || "";
 let runtimeKlingBaseUrl = process.env.KLING_BASE_URL || "https://api.klingai.com/v1";
+let runtimeDeepseekKey = process.env.DEEPSEEK_API_KEY || "";
+let runtimeDeepseekBaseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 let runtimeMjMode: 'openai' | 'task' = (process.env.MJ_MODE as any) || 'openai';
 let runtimeProxySecret = process.env.PROXY_SECRET_KEY || "liangshan";
 
@@ -53,15 +86,26 @@ function getAI(): GoogleGenAI {
 
 // 辅助函数：统一处理模型名称映射，将虚拟模型映射到真实存在的 Google 模型
 function mapModelName(model: string): string {
-  if (!model) return "gemini-1.5-pro";
-  
-  // 处理常见的虚拟版本号映射
-  if (model.includes("gemini-3.1-pro") || model.includes("gemini-3-pro")) return "gemini-1.5-pro";
-  if (model.includes("gemini-3.1-flash-image") || model.includes("gemini-3-flash-image")) return "imagen-3.0-generate-001";
-  if (model.includes("gemini-3.1-flash")) return "gemini-1.5-flash";
-  if (model.includes("imagen-3.0")) return "imagen-3.0-generate-001";
-  
+  if (!model) return "gemini-2.5-pro";
+  if (model.includes("imagen-3.0-fast")) return "imagen-4.0-fast-generate-001";
+  if (model.includes("imagen-3.0")) return "imagen-4.0-generate-001";
+  if (model === "jimeng-5.0" || model === "doubao-seedream-5.0-lite") return "ep-20260511162417-9xd8q";
+  if (model === "jimeng-4.5" || model === "doubao-seedream-4.5") return "ep-20260511162504-fjd6v";
+  if (model === "doubao-seedance-2.0") return "ep-20260511162215-hrcmj";
+  if (model === "doubao-seedance-2.0-fast") return "ep-20260511162340-5xlpt";
   return model;
+}
+
+// 辅助函数：判断是否为即梦/豆包模型
+function isVolcengineImageModel(originalModel: string, actionType?: string): boolean {
+  if (actionType === 'jimeng-video') return false;
+  if (actionType === 'jimeng-image') return true;
+  return (originalModel.includes('jimeng') || originalModel.includes('doubao') || originalModel.includes('seedream')) && !originalModel.includes('video') && !originalModel.includes('seedance');
+}
+
+function isVolcengineVideoModel(originalModel: string, actionType?: string): boolean {
+  if (actionType === 'jimeng-video') return true;
+  return (originalModel.includes('jimeng') && originalModel.includes('video')) || originalModel.includes('seedance');
 }
 
 const app = express();
@@ -359,13 +403,15 @@ app.get("/api/admin/config", requireAuth, (req, res) => {
     jimengBaseUrl: runtimeJimengBaseUrl,
     klingKey: runtimeKlingKey ? `${runtimeKlingKey.substring(0, 4)}****${runtimeKlingKey.substring(runtimeKlingKey.length - 4)}` : "",
     klingBaseUrl: runtimeKlingBaseUrl,
+    deepseekKey: runtimeDeepseekKey ? `${runtimeDeepseekKey.substring(0, 4)}****${runtimeDeepseekKey.substring(runtimeDeepseekKey.length - 4)}` : "",
+    deepseekBaseUrl: runtimeDeepseekBaseUrl,
     mjMode: runtimeMjMode
   });
 });
 
 app.post("/api/admin/config", requireAuth, (req, res) => {
   console.log(`[Admin] Received config update request from ${getRealClientIP(req)}`);
-  const { whitelist, geminiKey, openaiKey, openaiBaseUrl, midjourneyKey, midjourneyBaseUrl, fluxKey, fluxBaseUrl, jimengKey, jimengBaseUrl, klingKey, klingBaseUrl, mjMode } = req.body;
+  const { whitelist, geminiKey, openaiKey, openaiBaseUrl, midjourneyKey, midjourneyBaseUrl, fluxKey, fluxBaseUrl, jimengKey, jimengBaseUrl, klingKey, klingBaseUrl, deepseekKey, deepseekBaseUrl, mjMode } = req.body;
   if (whitelist !== undefined) {
     runtimeWhitelist = whitelist.split(',').map((ip: string) => ip.trim()).filter((ip: string) => ip.length > 0);
   }
@@ -402,6 +448,12 @@ app.post("/api/admin/config", requireAuth, (req, res) => {
   if (klingBaseUrl !== undefined) {
     runtimeKlingBaseUrl = klingBaseUrl.trim();
   }
+  if (deepseekKey && !deepseekKey.includes("****")) {
+    runtimeDeepseekKey = deepseekKey;
+  }
+  if (deepseekBaseUrl !== undefined) {
+    runtimeDeepseekBaseUrl = deepseekBaseUrl.trim();
+  }
   if (mjMode !== undefined) {
     runtimeMjMode = mjMode;
   }
@@ -420,6 +472,8 @@ app.post("/api/admin/config", requireAuth, (req, res) => {
     jimengBaseUrl: runtimeJimengBaseUrl,
     klingKey: runtimeKlingKey ? `${runtimeKlingKey.substring(0, 4)}****${runtimeKlingKey.substring(runtimeKlingKey.length - 4)}` : "",
     klingBaseUrl: runtimeKlingBaseUrl,
+    deepseekKey: runtimeDeepseekKey ? `${runtimeDeepseekKey.substring(0, 4)}****${runtimeDeepseekKey.substring(runtimeDeepseekKey.length - 4)}` : "",
+    deepseekBaseUrl: runtimeDeepseekBaseUrl,
     mjMode: runtimeMjMode
   });
 });
@@ -440,10 +494,18 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
     let targetSize = '1024x1024';
     let geminiImageSize = '1K';
 
-    if (rawSize.includes('512') || rawSize === 'small') { targetSize = '512x512'; geminiImageSize = '512'; }
-    else if (rawSize.includes('2048') || rawSize === '2k') { targetSize = '2048x2048'; geminiImageSize = '2K'; }
-    else if (rawSize.includes('4096') || rawSize === '4k') { targetSize = '4096x2304'; geminiImageSize = '4K'; } // 16:9 for 4K
-    else { targetSize = '1024x1024'; geminiImageSize = '1K'; }
+    if (rawSize.match(/^\d+x\d+$/)) { 
+        targetSize = rawSize;
+        if (rawSize.includes('2048') || rawSize.includes('1536')) geminiImageSize = '2K';
+        else if (rawSize.includes('4096') || rawSize.includes('2304')) geminiImageSize = '4K';
+        else if (rawSize.includes('512') || rawSize.includes('256')) geminiImageSize = '512';
+        else geminiImageSize = '1K';
+    } else {
+        if (rawSize.includes('512') || rawSize === 'small') { targetSize = '512x512'; geminiImageSize = '512'; }
+        else if (rawSize.includes('2048') || rawSize === '2k') { targetSize = '2048x2048'; geminiImageSize = '2K'; }
+        else if (rawSize.includes('4096') || rawSize === '4k') { targetSize = '4096x2304'; geminiImageSize = '4K'; } // 16:9 for 4K
+        else { targetSize = '1024x1024'; geminiImageSize = '1K'; }
+    }
 
     // DALL-E 尺寸限制 (OpenAI 官方不支持 4K 请求参数名，最高只到 1792)
     if (model && (model.includes('dall-e') || model.includes('gpt-image'))) {
@@ -600,14 +662,21 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
        return res.json({ success: true, imageUrl: finalImageUrl, estimatedCostUsd });
     }
 
-    // GPT 路线
-    if (model.includes('gpt')) {
-       const API_KEY = runtimeOpenaiKey;
-       if (!API_KEY) throw new Error("网关未配置 OPENAI_API_KEY (Unconfigured OPENAI_API_KEY)");
+    // GPT / DeepSeek 路线
+    if (model.includes('gpt') || model.includes('deepseek')) {
+       let API_KEY = runtimeOpenaiKey;
+       let BASE_URL = runtimeOpenaiBaseUrl || "https://api.openai.com/v1";
+       
+       if (model.includes('deepseek')) {
+           API_KEY = runtimeDeepseekKey;
+           BASE_URL = runtimeDeepseekBaseUrl || "https://api.deepseek.com";
+       }
+
+       if (!API_KEY) throw new Error(`网关未配置 ${model} 的 API_KEY`);
        
        const openai = new OpenAI({ 
            apiKey: API_KEY,
-           baseURL: runtimeOpenaiBaseUrl || "https://api.openai.com/v1" 
+           baseURL: BASE_URL 
        });
        const response = await openai.chat.completions.create({
           model: model,
@@ -618,26 +687,67 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
        const outTokens = response.usage?.completion_tokens || 0;
        const estimatedCostUsd = recordBillingLog('chat', model, prompt, { inputTokens: inTokens, outputTokens: outTokens }, req);
        
-       return res.json({ success: true, text: response.choices[0]?.message?.content || "", estimatedCostUsd, raw: response });
+       const msgResponse = response.choices[0]?.message as any;
+       let textOut = msgResponse?.content || "";
+       if (msgResponse?.reasoning_content) {
+          textOut = `> **思考过程 (Reasoning):**\n> \n> ${msgResponse.reasoning_content.replace(/\n/g, '\n> ')}\n\n---\n\n${textOut}`;
+       }
+
+       return res.json({ success: true, text: textOut, estimatedCostUsd, raw: response });
     }
 
-    // 即梦 Jimeng (图像)
-    if (model.includes('jimeng') && !model.includes('video')) {
+    // 即梦 Jimeng (图像) / 豆包 Seedream
+    if (isVolcengineImageModel(req.body.model, req.body.actionType) || (model.startsWith('ep-') && !req.body.model.includes('video') && !req.body.model.includes('seedance') && !req.body.model.includes('dance') && req.body.actionType !== 'jimeng-video')) {
        const API_KEY = runtimeJimengKey;
-       const BASE_URL = runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3";
-       if (!API_KEY) throw new Error(`网关未配置即梦 (JIMENG) 所需的 API Key`);
+       let BASE_URL = runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+       BASE_URL = BASE_URL.trim().replace(/\/$/, '');
+       if (BASE_URL.includes('ark.cn-beijing.volces.com') && !BASE_URL.includes('/api/v3')) {
+           BASE_URL = `${BASE_URL}/api/v3`;
+       }
+       if (!API_KEY) throw new Error(`网关未配置火山引擎 (即梦/豆包) 所需的 API Key`);
 
-       const response = await fetch(`${BASE_URL}/images/generations`, {
+       let jimengMappedSize = targetSize;
+       
+       const originalModel = req.body.model || '';
+       if (originalModel.includes('5-0') || originalModel.includes('5.0') || originalModel.includes('4-5') || originalModel.includes('4.5') || model === "ep-20260511162417-9xd8q" || model === "ep-20260511162504-fjd6v") {
+           const parts = targetSize.split('x');
+           if (parts.length === 2) {
+               let w = parseInt(parts[0]);
+               let h = parseInt(parts[1]);
+               const aspect = w / h;
+               if (w * h < 3686400) {
+                   h = Math.ceil(Math.sqrt(4194304 / aspect));
+                   w = Math.ceil(h * aspect);
+                   w = Math.ceil(w / 32) * 32;
+                   h = Math.ceil(h / 32) * 32;
+                   jimengMappedSize = `${w}x${h}`;
+               }
+           }
+       }
+
+       let reqBody: any = {
+           model: model,
+           prompt: prompt,
+           size: jimengMappedSize,
+           logo_info: { add_logo: false, is_logo_cleared: true },
+           watermark: false
+       };
+       if (req.body.referenceImage) {
+           reqBody.image = req.body.referenceImage;
+       }
+
+       let fetchUrl = BASE_URL.trim().replace(/\/$/, '');
+       if (!fetchUrl.endsWith('/images/generations')) {
+           fetchUrl = `${fetchUrl}/images/generations`;
+       }
+
+       const response = await fetch(fetchUrl, {
            method: 'POST',
            headers: {
                'Content-Type': 'application/json',
                'Authorization': `Bearer ${API_KEY}`
            },
-           body: JSON.stringify({
-               model: model,
-               prompt: prompt,
-               size: targetSize
-           })
+           body: JSON.stringify(reqBody)
        });
 
        const data = await response.json();
@@ -649,27 +759,114 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
     }
 
     // 可灵 Kling AI / 即梦 Jimeng (视频)
-    if (model.includes('kling') || (model.includes('jimeng') && model.includes('video'))) {
+    if (model.includes('kling') || isVolcengineVideoModel(req.body.model, req.body.actionType) || (model.startsWith('ep-') && (req.body.model.includes('video') || req.body.model.includes('seedance') || req.body.model.includes('dance') || req.body.actionType === 'jimeng-video'))) {
        const isKling = model.includes('kling');
        const API_KEY = isKling ? runtimeKlingKey : runtimeJimengKey;
-       const BASE_URL = isKling ? (runtimeKlingBaseUrl || "https://api.klingai.com/v1") : (runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3");
+       
+       let rawKlingUrl = runtimeKlingBaseUrl || "https://api.klingai.com/v1";
+       rawKlingUrl = rawKlingUrl.trim().replace(/\/$/, '');
+       // Fix user misconfiguration if they forgot /v1 for official kling API
+       if (rawKlingUrl.includes('klingai.com') && !rawKlingUrl.includes('/v1')) {
+           rawKlingUrl = `${rawKlingUrl}/v1`;
+       }
+
+       let rawJimengUrl = runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+       rawJimengUrl = rawJimengUrl.trim().replace(/\/$/, '');
+       if (rawJimengUrl.includes('ark.cn-beijing.volces.com') && !rawJimengUrl.includes('/api/v3')) {
+           rawJimengUrl = `${rawJimengUrl}/api/v3`;
+       }
+
+       const BASE_URL = isKling ? rawKlingUrl : rawJimengUrl;
        
        if (!API_KEY) throw new Error(`网关未配置 ${isKling ? '可灵 (KLING)' : '即梦 (JIMENG)'} 所需的 API Key`);
 
-       let submitUrl = isKling ? `${BASE_URL}/videos/text2video` : `${BASE_URL}/video/generations`;
-       let submitBody: any = isKling ? {
-           model: model,
-           prompt: prompt
-       } : {
-           model: model,
-           prompt: prompt
-       };
+       let tokenToUse = API_KEY;
+       if (isKling && API_KEY) {
+           // Provide safe net for official Kling AK/SK
+           const parts = API_KEY.split(/[\.:\|]/);
+           if (parts.length === 2 && !API_KEY.startsWith('eyJ') && !API_KEY.startsWith('sk-') && BASE_URL.includes('kling')) {
+               tokenToUse = generateKlingJwt(parts[0], parts[1]);
+           }
+       }
 
+       let klingVideoPath = model.includes('o1') || model.includes('omni') ? 'omni-video' : 'text2video';
+       if (isKling && req.body.referenceImage && !model.includes('o1') && !model.includes('omni')) {
+           klingVideoPath = 'image2video';
+       }
+
+       let submitUrl = isKling ? `${BASE_URL.replace(/\/$/, '')}/videos/${klingVideoPath}` : `${BASE_URL.replace(/\/$/, '')}/contents/generations/tasks`;
+       
+       // Handle users putting exact endpoints into Base URL
+       if (BASE_URL.includes('/videos/') || BASE_URL.includes('/tasks') || (!isKling && BASE_URL.includes('/video/'))) {
+           submitUrl = BASE_URL.trim();
+       }
+
+       let seedanceResolution = req.body.videoResolution || req.body.resolution || "720p";
+       if (!isKling && model.includes('fast') && seedanceResolution === '1080p') {
+           seedanceResolution = '720p';
+       }
+
+       let klingActualModelName = model;
+       if (model === 'kling') {
+           klingActualModelName = "kling-v1-5";
+       }
+
+       let submitBody: any = {};
+       
+       if (isKling) {
+           submitBody = {
+               model_name: klingActualModelName,
+               prompt: prompt,
+           };
+           
+           // 可灵官方文档要求 duration 为 string："5" 或 "10"
+           submitBody.duration = typeof req.body.duration !== 'undefined' ? String(req.body.duration) : "5";
+           
+           if (req.body.aspectRatio) {
+               submitBody.aspect_ratio = req.body.aspectRatio;
+           }
+           if (req.body.videoResolution === '1080p') submitBody.mode = 'pro';
+           if (req.body.videoResolution === '720p') submitBody.mode = 'std';
+           
+           if (klingVideoPath === 'image2video' && req.body.referenceImage) {
+               submitBody.image = req.body.referenceImage;
+               if (req.body.referenceImageTail) submitBody.image_tail = req.body.referenceImageTail;
+               
+               
+               // 官方部分接口 image2video 可能不支持 aspect_ratio，由原图决定，这里可选删除
+               // delete submitBody.aspect_ratio;
+           }
+           submitBody.model = model; // For proxy compatibility
+       } else {
+           submitBody = {
+               model: model,
+               content: [
+                   { type: "text", text: prompt }
+               ],
+               ratio: req.body.aspectRatio || "16:9",
+               resolution: seedanceResolution,
+               logo_info: { add_logo: false, is_logo_cleared: true },
+               watermark: false
+           };
+           // 豆包/即梦 生成时长限制：如果模型版本需要控制
+           let durationNum = typeof req.body.duration !== 'undefined' ? parseInt(req.body.duration) : 5;
+           submitBody.duration = durationNum;
+           
+           if (req.body.referenceImage) {
+               submitBody.content.unshift({
+                   type: "image",
+                   image_url: { url: req.body.referenceImage }
+               });
+           }
+       }
+
+       console.log("Sending request to:", submitUrl);
+       console.log("Sending request to:", submitUrl);
        const submitResponse = await fetch(submitUrl, {
            method: 'POST',
            headers: {
                'Content-Type': 'application/json',
-               'Authorization': `Bearer ${API_KEY}`
+               'Authorization': `Bearer ${tokenToUse}`
            },
            body: JSON.stringify(submitBody)
        });
@@ -677,35 +874,51 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
        const submitData = await submitResponse.json();
        if (!submitResponse.ok) throw new Error(submitData.error?.message || JSON.stringify(submitData));
 
-       const taskId = isKling ? submitData.data?.task_id : submitData.id || submitData.task_id;
+       const taskId = isKling ? (submitData.data?.task_id || submitData.task_id || submitData.id) : (submitData.id || submitData.task_id || submitData.data?.task_id);
        if (!taskId) throw new Error("未能获取任务 ID (Task ID not found)");
 
        console.log(`[Unified Gateway] Domestic Video Task submitted: ${taskId}. Polling...`);
 
        let finalVideoUrl = "";
        let startTime = Date.now();
-       const TIMEOUT = 300000; // 5分钟
+       const TIMEOUT = 260000; // < 5 mins for cloudrun safety
 
        while (Date.now() - startTime < TIMEOUT) {
            await new Promise(r => setTimeout(r, 10000)); // 10秒轮询
            
-           let pollUrl = isKling ? `${BASE_URL}/videos/text2video/${taskId}` : `${BASE_URL}/video/tasks/${taskId}`;
+           let pollUrl = isKling ? `${BASE_URL.replace(/\/$/, '')}/videos/${klingVideoPath}/${taskId}` : `${BASE_URL.replace(/\/$/, '')}/contents/generations/tasks/${taskId}`;
            
-           // 处理部分中转网关可能使用的不同路径
-           if (isKling && (runtimeJimengBaseUrl?.includes('api.klingai.com') === false)) {
-               // 如果不是直接调用官网，可能路径是 /tasks/
-               pollUrl = `${BASE_URL}/videos/tasks/${taskId}`;
+           if (BASE_URL.includes('/videos/')) { // Handles /videos/omni-video etc.
+               // Handle standard overseas API proxy proxying
+               pollUrl = `${BASE_URL.trim().replace(/\/text2video|\/omni-video/g, '/tasks')}/${taskId}`;
+               if (BASE_URL.includes('/text2video') || BASE_URL.includes('/omni-video')) {
+                   pollUrl = `${BASE_URL.trim()}/${taskId}`;
+               }
+           } else if (BASE_URL.includes('/tasks')) {
+               pollUrl = `${BASE_URL.trim()}/${taskId}`;
            }
 
            const pollResponse = await fetch(pollUrl, {
-               headers: { 'Authorization': `Bearer ${API_KEY}` }
+               headers: { 'Authorization': `Bearer ${tokenToUse}` }
            });
-           const pollData = await pollResponse.json();
+           
+           let pollData;
+           let pollText = "";
+           try {
+               pollText = await pollResponse.text();
+               pollData = JSON.parse(pollText);
+           } catch(e) {
+               console.error(`[Unified Gateway] Polling JSON error on ${pollUrl}: ${pollText.substring(0, 100)}...`);
+               if (!pollResponse.ok) continue; // Just wait, maybe 502/HTML is intermittent
+               throw new Error(`上游服务器解析错误 (Upstream format error): ${pollText.substring(0, 50)}`);
+           }
 
-           const status = isKling ? (pollData.data?.task_status || pollData.status) : (pollData.status || (pollData.data && pollData.data.status));
-           const resultVideoUrl = isKling ? (pollData.data?.task_result?.videos?.[0]?.url || pollData.video_url) : (pollData.video_url || pollData.url || (pollData.data && (pollData.data.url || pollData.data.video_url)));
+           const status = isKling ? (pollData.data?.task_status || pollData.status || (pollData.data && pollData.data.status)) : (pollData.status || (pollData.data && pollData.data.status));
+           const resultVideoUrl = isKling ? (pollData.data?.task_result?.videos?.[0]?.url || pollData.video_url || (pollData.data && (pollData.data.url || pollData.data.video_url))) : (pollData.content?.video_url || pollData.video_url || pollData.url || (pollData.data && (pollData.data.url || pollData.data.video_url || pollData.data.content?.video_url)));
 
-           if ((status === 'SUCCESS' || status === 'completed' || status === 'done' || status === 'succeeded') && resultVideoUrl) {
+           console.log(`[Unified Gateway] Domestic Video Task ${taskId} iter status: ${status}, videoUrl: ${resultVideoUrl ? 'YES' : 'NO'}`, pollData);
+
+           if ((status === 'SUCCESS' || status === 'completed' || status === 'done' || status === 'succeeded' || status === 'succeed') && resultVideoUrl) {
                finalVideoUrl = resultVideoUrl;
                break;
            } else if (status === 'FAILURE' || status === 'failed') {
@@ -718,11 +931,6 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
 
        const estimatedCostUsd = recordBillingLog('video', model, prompt, { resolution: '720p' }, req);
        return res.json({ success: true, videoUrl: finalVideoUrl, estimatedCostUsd, raw: { taskId } });
-    }
-
-    // 模型映射处理 (Model Mapping)
-    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast') || model.includes('gemini-2.5-flash-image') || model.includes('gemini-3.'))) {
-        model = "imagen-3.0-generate-001";
     }
 
     // Gemini 图像路线 (Imagen / Nano Banana)
@@ -800,7 +1008,7 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
 
   } catch (error: any) {
     console.error("Unified Router API Error:", error);
-    recordDispatchLog(false, "/api/v1/generate", req.body?.model, error.message || "内部服务错误", error, req);
+    recordDispatchLog(false, "/api/v1/generate", req.body?.model, "fetch failed: " + (typeof submitUrl !== 'undefined' ? submitUrl : "unknown URL") + " - " + error.message, Object.keys(error).length === 0 ? error.message : error, req);
     res.status(500).json({ success: false, error: error.message || "内部服务错误" });
   }
 });
@@ -864,9 +1072,15 @@ app.post(["/v1/chat/completions", "/api/v1/chat/completions", "/v1/v1/chat/compl
     }
 
     // 若不是 gemini 模型，则透传给 OpenAI 兼容后端
-    const API_KEY = runtimeOpenaiKey;
-    const BASE_URL = runtimeOpenaiBaseUrl || "https://api.openai.com/v1";
-    if (!API_KEY) throw new Error(`网关未配置 ${model} 所需的 API Key (OpenAI Key)`);
+    let API_KEY = runtimeOpenaiKey;
+    let BASE_URL = runtimeOpenaiBaseUrl || "https://api.openai.com/v1";
+
+    if (model.includes('deepseek')) {
+       API_KEY = runtimeDeepseekKey;
+       BASE_URL = runtimeDeepseekBaseUrl || "https://api.deepseek.com";
+    }
+
+    if (!API_KEY) throw new Error(`网关未配置 ${model} 所需的 API Key (未提供对应平台的 Key)`);
 
     const response = await fetch(`${BASE_URL}/chat/completions`, {
         method: 'POST',
@@ -924,11 +1138,6 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
     else if (rawSize.includes('512') || rawSize === 'small') geminiImageSize = '512';
     else geminiImageSize = '1K';
 
-    // 模型映射处理 (Model Mapping)
-    if (model && (model.includes('imagen-3.0') || model.includes('imagen-3-fast'))) {
-      model = "imagen-3.0-generate-001";
-    }
-
     // OpenAI 尺寸规范化 (DALL-E 3 仅支持 1024 或 1792)
     if (model && (model.includes('dall-e') || model.includes('gpt-image'))) {
         if (model.includes('dall-e-3')) n = 1; // DALL-E 3 only supports n=1
@@ -957,10 +1166,6 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
           else if (h > w * 1.5) reqAspectRatio = "9:16";
           else if (w > h) reqAspectRatio = "4:3";
           else if (h > w) reqAspectRatio = "3:4";
-      }
-
-      if (model.includes("imagen-") || model.includes("gemini-2.5-flash-image") || model.includes("gemini-3.")) {
-          model = "imagen-3.0-generate-001";
       }
 
       const contents: any[] = [{ role: 'user', parts: [] }];
@@ -1023,6 +1228,204 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
         created: Math.floor(Date.now() / 1000),
         data: [resultItem]
       });
+    }
+    
+    // 可灵 Kling AI / 即梦 Jimeng (视频) 透传支持
+    if (model.includes('kling') || isVolcengineVideoModel(req.body.model, req.body.actionType) || (model.startsWith('ep-') && (req.body.model.includes('video') || req.body.model.includes('seedance') || req.body.model.includes('dance') || req.body.actionType === 'jimeng-video'))) {
+       const isKling = model.includes('kling');
+       const API_KEY = isKling ? runtimeKlingKey : runtimeJimengKey;
+       
+       let rawKlingUrl = runtimeKlingBaseUrl || "https://api.klingai.com/v1";
+       rawKlingUrl = rawKlingUrl.trim().replace(/\/$/, '');
+       if (rawKlingUrl.includes('klingai.com') && !rawKlingUrl.includes('/v1')) {
+           rawKlingUrl = `${rawKlingUrl}/v1`;
+       }
+
+       let rawJimengUrl = runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+       rawJimengUrl = rawJimengUrl.trim().replace(/\/$/, '');
+       if (rawJimengUrl.includes('ark.cn-beijing.volces.com') && !rawJimengUrl.includes('/api/v3')) {
+           rawJimengUrl = `${rawJimengUrl}/api/v3`;
+       }
+
+       const BASE_URL = isKling ? rawKlingUrl : rawJimengUrl;
+       if (!API_KEY) throw new Error(`网关未配置 ${isKling ? '可灵 (KLING)' : '即梦 (JIMENG)'} 所需的 API Key`);
+
+       let tokenToUse = API_KEY;
+       if (isKling && API_KEY) {
+           const parts = API_KEY.split(/[\.:\|]/);
+           if (parts.length === 2 && !API_KEY.startsWith('eyJ') && !API_KEY.startsWith('sk-') && BASE_URL.includes('kling')) {
+               tokenToUse = generateKlingJwt(parts[0], parts[1]);
+           }
+       }
+
+       let klingVideoPath = model.includes('o1') || model.includes('omni') ? 'omni-video' : 'text2video';
+       let submitUrl = isKling ? `${BASE_URL.replace(/\/$/, '')}/videos/${klingVideoPath}` : `${BASE_URL.replace(/\/$/, '')}/contents/generations/tasks`;
+       
+       if (BASE_URL.includes('/videos/') || BASE_URL.includes('/tasks') || (!isKling && BASE_URL.includes('/video/'))) {
+           submitUrl = BASE_URL.trim();
+       }
+
+       let seedanceResolution = req.body.videoResolution || req.body.resolution || "720p";
+       if (!isKling && model.includes('fast') && seedanceResolution === '1080p') {
+           seedanceResolution = '720p';
+       }
+
+       let klingActualModelName = model;
+       if (model === 'kling') {
+           klingActualModelName = "kling-v1-5";
+       }
+
+       let submitBody: any = isKling ? {
+            model_name: klingActualModelName,
+            prompt: prompt,
+            aspect_ratio: req.body.aspectRatio || req.body.aspect_ratio || "16:9",
+            duration: typeof req.body.duration !== 'undefined' ? parseInt(req.body.duration) : 5
+        } : {
+            model: model,
+            content: [ { type: "text", text: prompt } ],
+            ratio: req.body.aspectRatio || req.body.aspect_ratio || "16:9",
+            resolution: seedanceResolution,
+            duration: typeof req.body.duration !== 'undefined' ? parseInt(req.body.duration) : 5,
+            logo_info: { add_logo: false, is_logo_cleared: true },
+            watermark: false
+        };
+
+        if (isKling) {
+            submitBody.model = model;
+        }
+
+       const submitResponse = await fetch(submitUrl, {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${tokenToUse}`
+           },
+           body: JSON.stringify(submitBody)
+       });
+
+       const submitData = await submitResponse.json();
+       if (!submitResponse.ok) throw new Error(submitData.error?.message || JSON.stringify(submitData));
+
+       const taskId = isKling ? (submitData.data?.task_id || submitData.task_id || submitData.id) : (submitData.id || submitData.task_id || submitData.data?.task_id);
+       if (!taskId) throw new Error("未能获取任务 ID (Task ID not found)");
+
+       let finalVideoUrl = "";
+       let startTime = Date.now();
+       const TIMEOUT = 260000;
+
+       while (Date.now() - startTime < TIMEOUT) {
+           await new Promise(r => setTimeout(r, 10000));
+           
+           let pollUrl = isKling ? `${BASE_URL.replace(/\/$/, '')}/videos/${klingVideoPath}/${taskId}` : `${BASE_URL.replace(/\/$/, '')}/contents/generations/tasks/${taskId}`;
+           if (BASE_URL.includes('/videos/')) {
+               pollUrl = `${BASE_URL.trim().replace(/\/text2video|\/omni-video/g, '/tasks')}/${taskId}`;
+               if (BASE_URL.includes('/text2video') || BASE_URL.includes('/omni-video')) { pollUrl = `${BASE_URL.trim()}/${taskId}`; }
+           } else if (BASE_URL.includes('/tasks')) {
+               pollUrl = `${BASE_URL.trim()}/${taskId}`;
+           }
+
+           const pollResponse = await fetch(pollUrl, { headers: { 'Authorization': `Bearer ${tokenToUse}` } });
+           
+           let pollData;
+           let pollText = "";
+           try {
+               pollText = await pollResponse.text();
+               pollData = JSON.parse(pollText);
+           } catch(e) {
+               console.error(`[Unified Gateway - OpenAI] Polling JSON error on ${pollUrl}: ${pollText.substring(0, 100)}...`);
+               if (!pollResponse.ok) continue;
+               throw new Error(`上游服务器解析错误 (Upstream format error): ${pollText.substring(0, 50)}`);
+           }
+
+           const status = isKling ? (pollData.data?.task_status || pollData.status || (pollData.data && pollData.data.status)) : (pollData.status || (pollData.data && pollData.data.status));
+           const resultVideoUrl = isKling ? (pollData.data?.task_result?.videos?.[0]?.url || pollData.video_url || (pollData.data && (pollData.data.url || pollData.data.video_url))) : (pollData.content?.video_url || pollData.video_url || pollData.url || (pollData.data && (pollData.data.url || pollData.data.video_url || pollData.data.content?.video_url)));
+
+           console.log(`[Unified Gateway] Domestic Video Task ${taskId} iter status: ${status}, videoUrl: ${resultVideoUrl ? 'YES' : 'NO'}`, pollData);
+
+           if ((status === 'SUCCESS' || status === 'completed' || status === 'done' || status === 'succeeded' || status === 'succeed') && resultVideoUrl) {
+               finalVideoUrl = resultVideoUrl;
+               break;
+           } else if (status === 'FAILURE' || status === 'failed') {
+               throw new Error(`生成失败: ${pollData.error?.message || '任务状态异常'}`);
+           }
+       }
+
+       if (!finalVideoUrl) throw new Error("视频生成超时");
+       
+       const resultData = { created: Math.floor(Date.now() / 1000), data: [{ url: finalVideoUrl }] };
+       recordDispatchLog(true, "/v1/images/generations", model, "Video API success returning as Image API format", req.body, req, resultData);
+       return res.json(resultData);
+    }
+    
+    // 即梦 Jimeng (图像) / 豆包 Seedream
+    if (isVolcengineImageModel(req.body.model, req.body.actionType) || (model.startsWith('ep-') && !req.body.model.includes('video') && !req.body.model.includes('seedance') && !req.body.model.includes('dance') && req.body.actionType !== 'jimeng-video')) {
+       const API_KEY = runtimeJimengKey;
+       let BASE_URL = runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+       BASE_URL = BASE_URL.trim().replace(/\/$/, '');
+       if (BASE_URL.includes('ark.cn-beijing.volces.com') && !BASE_URL.includes('/api/v3')) {
+           BASE_URL = `${BASE_URL}/api/v3`;
+       }
+       if (!API_KEY) throw new Error(`网关未配置火山引擎 (即梦/豆包) 所需的 API Key`);
+
+       let jimengMappedSize = size;
+       const originalModel = req.body.model || '';
+       if (originalModel.includes('5-0') || originalModel.includes('5.0') || originalModel.includes('4-5') || originalModel.includes('4.5') || model === "ep-20260511162417-9xd8q" || model === "ep-20260511162504-fjd6v") {
+           const parts = size.split('x');
+           if (parts.length === 2) {
+               let w = parseInt(parts[0]);
+               let h = parseInt(parts[1]);
+               const aspect = w / h;
+               if (w * h < 3686400) {
+                   h = Math.ceil(Math.sqrt(4194304 / aspect));
+                   w = Math.ceil(h * aspect);
+                   w = Math.ceil(w / 32) * 32;
+                   h = Math.ceil(h / 32) * 32;
+                   jimengMappedSize = `${w}x${h}`;
+               }
+           }
+       }
+       let reqBodyVolc: any = {
+           model: model,
+           prompt: prompt,
+           size: jimengMappedSize,
+           logo_info: { add_logo: false, is_logo_cleared: true },
+           watermark: false
+       };
+
+       let refImg = req.body.referenceImage || req.body.image || req.body.init_image;
+       if (refImg && typeof refImg === 'string' && refImg.startsWith('data:')) {
+           reqBodyVolc.image = refImg;
+       }
+
+       let fetchUrl = BASE_URL.trim().replace(/\/$/, '');
+       if (!fetchUrl.endsWith('/images/generations')) {
+           fetchUrl = `${fetchUrl}/images/generations`;
+       }
+
+       const response = await fetch(fetchUrl, {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${API_KEY}`
+           },
+           body: JSON.stringify(reqBodyVolc)
+       });
+
+       const data = await response.json();
+       if (!response.ok) throw new Error(data.error?.message || JSON.stringify(data));
+
+       const imageUrl = data.data?.[0]?.url || data.url;
+       
+       const resultItem: any = {};
+       if (response_format === "b64_json") {
+           resultItem.b64_json = data.data?.[0]?.b64_json || imageUrl; // Best effort if not b64 directly returned
+       } else {
+           resultItem.url = imageUrl;
+       }
+
+       const resultData = { created: Math.floor(Date.now() / 1000), data: [resultItem] };
+       recordDispatchLog(true, "/v1/images/generations", model, "Volcengine Image API success", req.body, req, resultData);
+       return res.json(resultData);
     }
     
     // 第三方透传 (Midjourney, Flux, OpenAI 等) 走已有的 Omni Router 类似逻辑映射
@@ -1093,7 +1496,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
   try {
     let { 
       prompt, 
-      model = "gemini-1.5-pro", 
+      model = "gemini-2.5-pro", 
       systemInstruction,
       temperature,
       images = [] // 支持传入多张 base64 图片数组作为视觉输入
@@ -1207,15 +1610,11 @@ app.post("/api/image", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
 
     console.log(`[API] Image Generation requesting model: ${model}, aspect: ${aspectRatio}`);
 
-    if (model.includes("imagen-") || model.includes("gemini-2.5-flash-image") || model.includes("imagen-3.0") || model.includes("gemini-3.")) {
-        model = "imagen-3.0-generate-001";
-    }
-
     // 重组请求包体 (支持垫图输入)
     const contents: any[] = [{ role: 'user', parts: [{ text: prompt }] }];
+    let finalData = "";
+    let finalMimeType = "image/jpeg";
     if (referenceImage) {
-        let finalData = "";
-        let finalMimeType = "image/jpeg";
         if (referenceImage.startsWith("http://") || referenceImage.startsWith("https://")) {
             console.log("Fetching reference image from URL:", referenceImage);
             try {
@@ -1240,34 +1639,99 @@ app.post("/api/image", heavyLimiter, mediaConcurrencyLimiter, requireAuth, async
         });
     }
 
-    const ai = getAI();
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: model,
-        contents: contents,
-        config: {
-          imageConfig: {
-            aspectRatio: aspectRatio, 
-            imageSize: imageSize,
-            numberOfImages: numberOfImages > 0 ? numberOfImages : 1
-          } as any
-        }
-      });
-    } catch(err: any) {
-      console.error("DEBUG generateContent error details:", err);
-      throw err;
+    if (isVolcengineImageModel(req.body.model, req.body.actionType) || (model.startsWith('ep-') && !req.body.model.includes('video') && !req.body.model.includes('seedance') && req.body.actionType !== 'jimeng-video')) {
+       const API_KEY = runtimeJimengKey;
+       let BASE_URL = runtimeJimengBaseUrl || "https://ark.cn-beijing.volces.com/api/v3";
+       BASE_URL = BASE_URL.trim().replace(/\/$/, '');
+       if (BASE_URL.includes('ark.cn-beijing.volces.com') && !BASE_URL.includes('/api/v3')) {
+           BASE_URL = `${BASE_URL}/api/v3`;
+       }
+       if (!API_KEY) throw new Error(`网关未配置火山引擎 (即梦/豆包) 所需的 API Key`);
+
+       let jimengMappedSize = imageSize === '512' ? '512x512' : (imageSize === '2K' ? '2048x2048' : (imageSize === '4K' ? '4096x2304' : '1024x1024'));
+       const originalModel = req.body.model || '';
+       if (originalModel.includes('5-0') || originalModel.includes('5.0') || originalModel.includes('4-5') || originalModel.includes('4.5') || model === "ep-20260511162417-9xd8q" || model === "ep-20260511162504-fjd6v") {
+           if (jimengMappedSize === '1024x1024' || jimengMappedSize === '512x512') {
+               jimengMappedSize = '2048x2048'; // Minimum required by seedream-5 and 4.5
+           }
+       }
+       let reqBody: any = {
+           model: model,
+           prompt: prompt,
+           size: jimengMappedSize,
+           logo_info: { add_logo: false, is_logo_cleared: true },
+           watermark: false
+       };
+       if (referenceImage) {
+           reqBody.image = `data:${finalMimeType};base64,${finalData}`;
+       }
+
+       let fetchUrl = BASE_URL.trim().replace(/\/$/, '');
+       if (!fetchUrl.endsWith('/images/generations')) {
+           fetchUrl = `${fetchUrl}/images/generations`;
+       }
+
+       const response = await fetch(fetchUrl, {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${API_KEY}`
+           },
+           body: JSON.stringify(reqBody)
+       });
+
+       const data = await response.json();
+       if (!response.ok) throw new Error(data.error?.message || JSON.stringify(data));
+
+       const imageUrl = data.data?.[0]?.url || data.url;
+       const estimatedCostUsd = recordBillingLog('image', model, prompt, { imageCount: 1, resolution: reqBody.size }, req);
+       recordDispatchLog(true, "/api/image", model, "Image Request Success", req.body, req);
+       return res.json({ success: true, imageUrl, estimatedCostUsd, raw: data });
     }
 
+    const ai = getAI();
     let base64Image = null;
-
-    if (response.candidates?.[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          base64Image = `data:image/jpeg;base64,${part.inlineData.data}`;
-          break;
+    
+    try {
+      if (model.includes("imagen")) {
+        const imageRes = await ai.models.generateImages({
+          model: model,
+          prompt: prompt,
+          config: {
+            numberOfImages: numberOfImages > 0 ? numberOfImages : 1,
+            aspectRatio: aspectRatio,
+            outputMimeType: 'image/jpeg'
+          }
+        });
+        const rawBase64 = imageRes.generatedImages?.[0]?.image?.imageBytes;
+        if (rawBase64) {
+          base64Image = `data:image/jpeg;base64,${rawBase64}`;
+        }
+      } else {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: contents,
+          config: {
+            imageConfig: {
+              aspectRatio: aspectRatio, 
+              imageSize: imageSize,
+              numberOfImages: numberOfImages > 0 ? numberOfImages : 1
+            } as any
+          }
+        });
+        
+        if (response.candidates?.[0]?.content?.parts) {
+          for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData) {
+              base64Image = `data:image/jpeg;base64,${part.inlineData.data}`;
+              break;
+            }
+          }
         }
       }
+    } catch(err: any) {
+      console.error("DEBUG generate error details:", err);
+      throw err;
     }
 
     if (!base64Image) {
@@ -1380,9 +1844,16 @@ app.post("/api/openai", requireAuth, async (req, res) => {
     if (!prompt) return res.status(400).json({ error: "缺少 prompt 参数" });
 
     // 使用热重载后的 runtime 密钥
-    const key = runtimeOpenaiKey;
+    let key = runtimeOpenaiKey;
+    let baseUrl = runtimeOpenaiBaseUrl || "https://api.openai.com/v1";
+
+    if (model.includes('deepseek')) {
+      key = runtimeDeepseekKey;
+      baseUrl = runtimeDeepseekBaseUrl || "https://api.deepseek.com";
+    }
+
     if (!key) {
-      return res.status(400).json({ error: "网关未配置 OPENAI_API_KEY。请在【控制面板】填写此密钥。" });
+      return res.status(400).json({ error: `网关未配置 ${model} 所需的 API Key。请在【控制面板】填写此密钥。` });
     }
 
     const messages = [];
@@ -1404,7 +1875,7 @@ app.post("/api/openai", requireAuth, async (req, res) => {
 
     const openai = new OpenAI({ 
       apiKey: key,
-      baseURL: runtimeOpenaiBaseUrl || "https://api.openai.com/v1" 
+      baseURL: baseUrl 
     });
     const response = await openai.chat.completions.create({
       model: model,
@@ -1419,9 +1890,17 @@ app.post("/api/openai", requireAuth, async (req, res) => {
 
     recordDispatchLog(true, "/api/openai", model, "OpenAI Pass-through Success", req.body, req);
 
+    const msgResponse = response.choices[0]?.message as any;
+    let textOut = msgResponse?.content || "";
+    
+    // DeepSeek reasoning support
+    if (msgResponse?.reasoning_content) {
+      textOut = `> **思考过程 (Reasoning):**\n> \n> ${msgResponse.reasoning_content.replace(/\n/g, '\n> ')}\n\n---\n\n${textOut}`;
+    }
+
     res.json({
       success: true,
-      text: response.choices[0]?.message?.content || "",
+      text: textOut,
       estimatedCostUsd,
       raw: response
     });
