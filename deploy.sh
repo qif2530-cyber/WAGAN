@@ -19,7 +19,8 @@ npm run build
 # 3. 清理环境
 echo "🧹 清理旧进程与端口占用..."
 pm2 delete ai-gateway 2>/dev/null || true
-fuser -k 3000/tcp 2>/dev/null || true
+sudo fuser -k 3000/tcp 2>/dev/null || true
+sudo kill -9 $(sudo lsof -t -i:3000) 2>/dev/null || true
 
 # 4. 启动服务 (PM2)
 echo "🔄 启动 PM2 后端服务..."
@@ -27,7 +28,8 @@ echo "🔄 启动 PM2 后端服务..."
 # 先检查是否有旧进程并彻底杀掉
 pm2 stop ai-gateway 2>/dev/null || true
 pm2 delete ai-gateway 2>/dev/null || true
-fuser -k 3000/tcp 2>/dev/null || true
+sudo fuser -k 3000/tcp 2>/dev/null || true
+sudo kill -9 $(sudo lsof -t -i:3000) 2>/dev/null || true
 
 # 使用 npm run start 启动
 NODE_ENV=production pm2 start npm --name ai-gateway -- run start
