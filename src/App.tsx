@@ -934,8 +934,8 @@ export default function App() {
                               </div>
                             )}
 
-                            {/* Resolution - Specific for Jimeng/Flux/Dalle */}
-                            {['dalle', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && (
+                            {/* Resolution - Specific for Jimeng/Flux/Dalle/Gemini */}
+                            {['image', 'dalle', 'fluxpro', 'fluxmax', 'jimeng-image'].includes(activeTab) && (
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3">
                                 <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Resolution)</label>
                                 <div className="flex flex-wrap gap-2">
