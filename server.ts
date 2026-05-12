@@ -439,8 +439,6 @@ app.get("/api/dispatch-logs", (req, res) => {
 
 // 新增：动态配置管理接口 (包含白名单及各厂商密钥)
 app.get("/api/admin/config", requireAuth, (req, res) => {
-  saveConfigToFile();
-  
   res.json({ 
     success: true, 
     whitelist: runtimeWhitelist.join(', '),
@@ -509,6 +507,8 @@ app.post("/api/admin/config", requireAuth, (req, res) => {
   if (mjMode !== undefined) {
     runtimeMjMode = mjMode;
   }
+  
+  saveConfigToFile();
   
   res.json({ 
     success: true, 

@@ -335,6 +335,12 @@ export default function App() {
         setAdminMidjourneyBaseUrl(data.midjourneyBaseUrl || "");
         setAdminFluxKey(data.fluxKey || "");
         setAdminFluxBaseUrl(data.fluxBaseUrl || "");
+        setAdminJimengKey(data.jimengKey || "");
+        setAdminJimengBaseUrl(data.jimengBaseUrl || "");
+        setAdminKlingKey(data.klingKey || "");
+        setAdminKlingBaseUrl(data.klingBaseUrl || "");
+        setAdminDeepseekKey(data.deepseekKey || "");
+        setAdminDeepseekBaseUrl(data.deepseekBaseUrl || "");
         setAdminMjMode(data.mjMode || 'openai');
         setIsSettingsUnlocked(true);
         setSettingsUnlockError(null);
