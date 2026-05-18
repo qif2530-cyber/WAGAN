@@ -5,10 +5,18 @@ echo "==================================="
 echo "   🚀 WAGAN 一键更新/部署脚本 🚀   "
 echo "==================================="
 
-echo "1. 修复可能存在的权限问题..."
+# 确保进入到脚本所在的目录（即项目根目录）
+cd "$(dirname "$0")"
+echo "当前工作目录: $(pwd)"
+
+echo "1. 修复可能存在的权限问题和清理缓存..."
 CURRENT_USER=$(whoami)
+# 强制变更所有权，避免 npm build 报 EACCES 错误
 sudo chown -R $CURRENT_USER:$CURRENT_USER ./ || true
+# 强制清理构建产物和 vite 缓存
 sudo rm -rf dist/ || true
+sudo rm -rf node_modules/.vite-temp || true
+sudo rm -rf node_modules/.vite || true
 
 echo "2. 拉取最新代码..."
 git pull origin main
