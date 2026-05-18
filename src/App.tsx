@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+// Git sync patch applied
 import { Copy, Check, Terminal, FileCode, Coffee, Play, Image as ImageIcon, MessageSquare, Video, Info, AlertTriangle, ExternalLink, Bot, Server, Shield, Download, Trash2, Plus, Upload, Search } from 'lucide-react';
 
 const CodeBlock = ({ title, code }: { title: string, code: string }) => {

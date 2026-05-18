@@ -2855,6 +2855,7 @@ app.post(
       }
 
       const videoObj = operation.response?.generatedVideos?.[0]?.video;
+      // Fetch video using correct Google GenAI SDK method
       let downloadLink = videoObj?.uri;
       let videoBytesBase64 = videoObj?.videoBytes;
 
