@@ -2818,6 +2818,14 @@ app.post(
       if (model && model.includes("veo-3.1")) {
         model = "veo-2.0-generate-001";
       }
+      
+      // Veo 视频模型比例规范化
+      if (model && model.includes("veo")) {
+        if (!["16:9", "9:16"].includes(aspectRatio)) {
+          console.log(`[Video API] aspect ratio ${aspectRatio} is not supported by Veo, fallback to 16:9`);
+          aspectRatio = "16:9"; 
+        }
+      }
 
       if (!prompt) return res.status(400).json({ error: "缺少 prompt 参数" });
 
