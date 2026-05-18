@@ -2855,11 +2855,29 @@ app.post(
       }
 
       const videoObj = operation.response?.generatedVideos?.[0]?.video;
-      const downloadLink = videoObj?.uri;
-      const videoBytesBase64 = videoObj?.videoBytes;
+      let downloadLink = videoObj?.uri;
+      let videoBytesBase64 = videoObj?.videoBytes;
+
+      if (!videoBytesBase64 && videoObj) {
+        console.log(`[API] Video generated, using ai.files.download to fetch content...`);
+        const tempPath = path.join("/tmp", `veo_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`);
+        try {
+          await ai.files.download({ file: videoObj, downloadPath: tempPath });
+          const videoBuffer = fs.readFileSync(tempPath);
+          videoBytesBase64 = videoBuffer.toString("base64");
+          fs.unlinkSync(tempPath);
+        } catch (e: any) {
+          console.error("[API] Failed to download video via sdk:", e);
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+          return res.status(500).json({
+            success: false,
+            error: `获取视频内容失败: ${e.message}`,
+          });
+        }
+      }
 
       if (videoBytesBase64) {
-        console.log(`[API] Video generated using videoBytes base64 string directly.`);
+        console.log(`[API] Video successfully converted to base64.`);
         // Record billing
         const estimatedCostUsd = recordBillingLog(
           "video",
@@ -2880,79 +2898,17 @@ app.post(
         );
         return res.json({
           success: true,
-          data: [{ url: `data:video/mp4;base64,${videoBytesBase64}` }],
+          videoUrl: `data:video/mp4;base64,${videoBytesBase64}`,
+          estimatedCostUsd
         });
       }
 
-      if (!downloadLink) {
-        return res
-          .status(500)
-          .json({
-            success: false,
-            error: "视频生成失败，模型未返回视频链接或数据。",
-          });
-      }
-
-      console.log(`[API] Video generated at URI: ${downloadLink}, fetching...`);
-      const apiKey = runtimeGeminiKey || "";
-      
-      // Try fetching purely without any auth headers first (for Signed URLs)
-      let videoResponse = await fetch(downloadLink, { method: "GET" });
-
-      if (!videoResponse.ok) {
-        console.log(`[API] Fetch without headers failed (${videoResponse.status}). Trying with x-goog-api-key...`);
-        videoResponse = await fetch(downloadLink, {
-          method: "GET",
-          headers: { "x-goog-api-key": apiKey },
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error: "视频生成失败，模型未返回视频链接或数据。",
         });
-      }
-
-      if (!videoResponse.ok && downloadLink.includes("generativelanguage.googleapis.com")) {
-        console.log("[API] Refetching with alt=media...");
-        const urlToFetch = downloadLink.includes("?") 
-            ? `${downloadLink}&key=${apiKey}&alt=media` 
-            : `${downloadLink}?key=${apiKey}&alt=media`;
-        videoResponse = await fetch(urlToFetch, { method: "GET" });
-      }
-
-      if (!videoResponse.ok) {
-        let errBody = "";
-        try {
-          errBody = await videoResponse.text();
-        } catch(e) {}
-        console.error(`[API] Video fetch failed. URL: ${downloadLink}, Status: ${videoResponse.status} ${videoResponse.statusText}, Body: ${errBody}`);
-        return res
-          .status(500)
-          .json({
-            success: false,
-            error: `获取视频内容失败: ${videoResponse.statusText}. Please check server logs for details.`,
-          });
-      }
-
-      // We send base64 back, which is easier for remote script to save as .mp4
-      const arrayBuffer = await videoResponse.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const videoBase64 = `data:video/mp4;base64,${buffer.toString("base64")}`;
-
-      // Record billing
-      const estimatedCostUsd = recordBillingLog(
-        "video",
-        model,
-        prompt,
-        { resolution },
-        req,
-      );
-
-      recordDispatchLog(
-        true,
-        "/api/video",
-        model,
-        "Video Request Started",
-        req.body,
-        req,
-      );
-
-      res.json({ success: true, videoUrl: videoBase64, estimatedCostUsd });
     } catch (error: any) {
       console.error("Video API Error:", error);
       recordDispatchLog(
