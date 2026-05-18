@@ -1175,7 +1175,7 @@ app.get(["/v1/models", "/api/v1/models", "/v1/v1/models"], requireAuth, async (r
   });
 });
 
-app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images/generations"], mediaConcurrencyLimiter, requireAuth, async (req, res) => {
+app.post([req.path, "/api/v1/images/generations", "/v1/v1/images/generations", "/v1/videos/generations", "/api/v1/videos/generations", "/v1/v1/videos/generations"], mediaConcurrencyLimiter, requireAuth, async (req, res) => {
   try {
     let { prompt, model = "dall-e-3", n = 1, size = "1024x1024", response_format = "url" } = req.body;
     
@@ -1274,7 +1274,7 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
       }
 
       const resultData = { data: [resultItem] };
-      recordDispatchLog(true, "/v1/images/generations", model, "Gemini Image Success", req.body, req, resultData);
+      recordDispatchLog(true, req.path, model, "Gemini Image Success", req.body, req, resultData);
 
       return res.json({
         created: Math.floor(Date.now() / 1000),
@@ -1405,7 +1405,7 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
        if (!finalVideoUrl) throw new Error("视频生成超时");
        
        const resultData = { created: Math.floor(Date.now() / 1000), data: [{ url: finalVideoUrl }] };
-       recordDispatchLog(true, "/v1/images/generations", model, "Video API success returning as Image API format", req.body, req, resultData);
+       recordDispatchLog(true, req.path, model, "Video API success returning as Image API format", req.body, req, resultData);
        return res.json(resultData);
     }
     
@@ -1476,7 +1476,7 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
        }
 
        const resultData = { created: Math.floor(Date.now() / 1000), data: [resultItem] };
-       recordDispatchLog(true, "/v1/images/generations", model, "Volcengine Image API success", req.body, req, resultData);
+       recordDispatchLog(true, req.path, model, "Volcengine Image API success", req.body, req, resultData);
        return res.json(resultData);
     }
     
@@ -1533,12 +1533,12 @@ app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images
     }
     
     const data = await response.json();
-    recordDispatchLog(true, "/v1/images/generations", req.body?.model, "Pass-through Success", req.body, req, data);
+    recordDispatchLog(true, req.path, req.body?.model, "Pass-through Success", req.body, req, data);
     return res.status(response.status).json(data);
 
   } catch (error: any) {
     console.error("[OpenAI Compatible API] v1/images/generations Error:", error);
-    recordDispatchLog(false, "/v1/images/generations", req.body?.model, error.message || "内部服务错误", error, req);
+    recordDispatchLog(false, req.path, req.body?.model, error.message || "内部服务错误", error, req);
     res.status(500).json({ error: { message: error.message || "内部服务错误", type: "server_error" } });
   }
 });
