@@ -2854,28 +2854,66 @@ app.post(
         });
       }
 
-      const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+      const videoObj = operation.response?.generatedVideos?.[0]?.video;
+      const downloadLink = videoObj?.uri;
+      const videoBytesBase64 = videoObj?.videoBytes;
 
-      // We return the raw Google Cloud Storage URL.
-      // Usually fetching it requires the API key. We will proxy the download dynamically or provide download URL.
-      // For simplicity, we proxy the video buffer back to Aliyun.
+      if (videoBytesBase64) {
+        console.log(`[API] Video generated using videoBytes base64 string directly.`);
+        // Record billing
+        const estimatedCostUsd = recordBillingLog(
+          "video",
+          model,
+          prompt,
+          { resolution },
+          req,
+        );
+
+        recordDispatchLog(
+          true,
+          "/api/video",
+          model,
+          "Video Bytes Success",
+          req.body,
+          req,
+          { text: "Base64 payload inline" },
+        );
+        return res.json({
+          success: true,
+          data: [{ url: `data:video/mp4;base64,${videoBytesBase64}` }],
+        });
+      }
+
       if (!downloadLink) {
         return res
           .status(500)
           .json({
             success: false,
-            error: "视频生成失败，模型未返回视频链接。",
+            error: "视频生成失败，模型未返回视频链接或数据。",
           });
       }
 
       console.log(`[API] Video generated at URI: ${downloadLink}, fetching...`);
       const apiKey = runtimeGeminiKey || "";
-      const videoResponse = await fetch(downloadLink, {
+      
+      // We first try with x-goog-api-key, and if it fails, try without it or with ?key=
+      let videoResponse = await fetch(downloadLink, {
         method: "GET",
         headers: {
           "x-goog-api-key": apiKey,
         },
       });
+
+      if (!videoResponse.ok && downloadLink.includes("storage.googleapis.com")) {
+        console.log("[API] Refetching storage link without API key header...");
+        videoResponse = await fetch(downloadLink, { method: "GET" });
+      } else if (!videoResponse.ok && downloadLink.includes("generativelanguage.googleapis.com")) {
+        console.log("[API] Refetching with alt=media...");
+        const urlToFetch = downloadLink.includes("?") 
+            ? `${downloadLink}&key=${apiKey}&alt=media` 
+            : `${downloadLink}?key=${apiKey}&alt=media`;
+        videoResponse = await fetch(urlToFetch, { method: "GET" });
+      }
 
       if (!videoResponse.ok) {
         return res
