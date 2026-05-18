@@ -6,7 +6,9 @@ echo "   🚀 WAGAN 一键更新/部署脚本 🚀   "
 echo "==================================="
 
 echo "1. 修复可能存在的权限问题..."
-sudo chown -R $USER:$USER ./ || true
+CURRENT_USER=$(whoami)
+sudo chown -R $CURRENT_USER:$CURRENT_USER ./ || true
+sudo rm -rf dist/ || true
 
 echo "2. 拉取最新代码..."
 git pull origin main
