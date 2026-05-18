@@ -2896,18 +2896,18 @@ app.post(
       console.log(`[API] Video generated at URI: ${downloadLink}, fetching...`);
       const apiKey = runtimeGeminiKey || "";
       
-      // We first try with x-goog-api-key, and if it fails, try without it or with ?key=
-      let videoResponse = await fetch(downloadLink, {
-        method: "GET",
-        headers: {
-          "x-goog-api-key": apiKey,
-        },
-      });
+      // Try fetching purely without any auth headers first (for Signed URLs)
+      let videoResponse = await fetch(downloadLink, { method: "GET" });
 
-      if (!videoResponse.ok && downloadLink.includes("storage.googleapis.com")) {
-        console.log("[API] Refetching storage link without API key header...");
-        videoResponse = await fetch(downloadLink, { method: "GET" });
-      } else if (!videoResponse.ok && downloadLink.includes("generativelanguage.googleapis.com")) {
+      if (!videoResponse.ok) {
+        console.log(`[API] Fetch without headers failed (${videoResponse.status}). Trying with x-goog-api-key...`);
+        videoResponse = await fetch(downloadLink, {
+          method: "GET",
+          headers: { "x-goog-api-key": apiKey },
+        });
+      }
+
+      if (!videoResponse.ok && downloadLink.includes("generativelanguage.googleapis.com")) {
         console.log("[API] Refetching with alt=media...");
         const urlToFetch = downloadLink.includes("?") 
             ? `${downloadLink}&key=${apiKey}&alt=media` 
@@ -2916,11 +2916,16 @@ app.post(
       }
 
       if (!videoResponse.ok) {
+        let errBody = "";
+        try {
+          errBody = await videoResponse.text();
+        } catch(e) {}
+        console.error(`[API] Video fetch failed. URL: ${downloadLink}, Status: ${videoResponse.status} ${videoResponse.statusText}, Body: ${errBody}`);
         return res
           .status(500)
           .json({
             success: false,
-            error: `获取视频内容失败: ${videoResponse.statusText}`,
+            error: `获取视频内容失败: ${videoResponse.statusText}. Please check server logs for details.`,
           });
       }
 
