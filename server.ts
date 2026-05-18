@@ -2,6 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { GoogleGenAI } from "@google/genai";
@@ -75,6 +76,8 @@ let runtimeDeepseekKey = process.env.DEEPSEEK_API_KEY || "";
 let runtimeDeepseekBaseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 let runtimeMjMode: 'openai' | 'task' = (process.env.MJ_MODE as any) || 'openai';
 let runtimeProxySecret = process.env.PROXY_SECRET_KEY || "liangshan";
+
+let runtimeWhitelist = (process.env.IP_WHITELIST || "127.0.0.1,::1").split(',').map(ip => ip.trim());
 
 // Load overrides from config.json if it exists
 try {
@@ -175,8 +178,6 @@ function getRealClientIP(req: express.Request): string {
   const country = req.headers['cf-ipcountry'] || req.headers['x-client-geo-location'] || 'Unknown Region';
   return `${clientIp} (${country})`;
 }
-
-let runtimeWhitelist = (process.env.IP_WHITELIST || "127.0.0.1,::1").split(',').map(ip => ip.trim());
 
 function isWhitelisted(req: express.Request): boolean {
   const ip = getRealClientIP(req).split(' ')[0]; // 只比对 IP 本体
@@ -1060,7 +1061,7 @@ app.post("/api/v1/generate", heavyLimiter, mediaConcurrencyLimiter, requireAuth,
 
   } catch (error: any) {
     console.error("Unified Router API Error:", error);
-    recordDispatchLog(false, "/api/v1/generate", req.body?.model, "fetch failed: " + (typeof submitUrl !== 'undefined' ? submitUrl : "unknown URL") + " - " + error.message, Object.keys(error).length === 0 ? error.message : error, req);
+    recordDispatchLog(false, "/api/v1/generate", req.body?.model, "fetch failed: unknown URL - " + error.message, Object.keys(error).length === 0 ? error.message : error, req);
     res.status(500).json({ success: false, error: error.message || "内部服务错误" });
   }
 });
@@ -1175,7 +1176,7 @@ app.get(["/v1/models", "/api/v1/models", "/v1/v1/models"], requireAuth, async (r
   });
 });
 
-app.post([req.path, "/api/v1/images/generations", "/v1/v1/images/generations", "/v1/videos/generations", "/api/v1/videos/generations", "/v1/v1/videos/generations"], mediaConcurrencyLimiter, requireAuth, async (req, res) => {
+app.post(["/v1/images/generations", "/api/v1/images/generations", "/v1/v1/images/generations", "/v1/videos/generations", "/api/v1/videos/generations", "/v1/v1/videos/generations"], mediaConcurrencyLimiter, requireAuth, async (req, res) => {
   try {
     let { prompt, model = "dall-e-3", n = 1, size = "1024x1024", response_format = "url" } = req.body;
     
@@ -1984,7 +1985,8 @@ app.all("/v1/*", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const isDev = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
+  if (isDev) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
