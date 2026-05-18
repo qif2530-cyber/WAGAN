@@ -2869,7 +2869,7 @@ app.post(
       }
 
       console.log(`[API] Video generated at URI: ${downloadLink}, fetching...`);
-      const apiKey = process.env.GEMINI_API_KEY || "";
+      const apiKey = runtimeGeminiKey || "";
       const videoResponse = await fetch(downloadLink, {
         method: "GET",
         headers: {
