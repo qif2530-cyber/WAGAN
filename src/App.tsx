@@ -132,10 +132,13 @@ export default function App() {
   const [imageSize, setImageSize] = useState('1K'); // 增加正式的 state 绑定
   const [videoResolution, setVideoResolution] = useState('720p');
   const [videoDuration, setVideoDuration] = useState(5);
+  const [referenceVideoDuration, setReferenceVideoDuration] = useState(5);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceImageName, setReferenceImageName] = useState<string | null>(null);
   const [referenceImageTail, setReferenceImageTail] = useState<string | null>(null);
   const [referenceImageTailName, setReferenceImageTailName] = useState<string | null>(null);
+  const [referenceVideo, setReferenceVideo] = useState<string | null>(null);
+  const [referenceVideoName, setReferenceVideoName] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro-preview');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -453,6 +456,9 @@ export default function App() {
         }
         if (referenceImageTail) {
           payload.referenceImageTail = referenceImageTail;
+        }
+        if (referenceVideo) {
+          payload.referenceVideo = referenceVideo;
         }
         
         // ------------- 动态比例计算层 -------------
@@ -916,6 +922,53 @@ export default function App() {
                                       </div>
                                       <button 
                                         onClick={() => { setReferenceImageTail(null); setReferenceImageTailName(null); }}
+                                        className="p-2 hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {activeTab === 'kling-video' && (
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-2">视频垫包上传 (Video to Video - 可选)</label>
+                                <div className="relative group">
+                                  {!referenceVideo ? (
+                                    <div className="border-2 border-dashed border-white/10 rounded-xl p-4 transition-all hover:bg-white/5 hover:border-emerald-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer relative overflow-hidden">
+                                      <Upload className="w-6 h-6 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                                      <span className="text-[10px] text-gray-500 group-hover:text-gray-300">点击上传 Base64 格式视频文件</span>
+                                      <input 
+                                        type="file" 
+                                        accept="video/*"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            if (file.size > 50 * 1024 * 1024) return alert('Video cannot exceed 50MB for upload preview.');
+                                            setReferenceVideoName(file.name);
+                                            const reader = new FileReader();
+                                            reader.readAsDataURL(file);
+                                            reader.onload = () => setReferenceVideo(reader.result as string);
+                                          }
+                                        }}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-3 flex items-center justify-between gap-3 animate-in fade-in zoom-in-95 duration-200">
+                                      <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="w-12 h-12 rounded bg-black/50 border border-white/10 flex items-center justify-center">
+                                          <Video className="w-5 h-5 text-emerald-400" />
+                                        </div>
+                                        <div className="overflow-hidden">
+                                          <p className="text-[10px] font-bold text-emerald-400 truncate">{referenceVideoName}</p>
+                                          <p className="text-[8px] text-gray-500">已成功加载视频。请求时注入 payload</p>
+                                        </div>
+                                      </div>
+                                      <button 
+                                        onClick={() => { setReferenceVideo(null); setReferenceVideoName(null); }}
                                         className="p-2 hover:bg-rose-500/20 text-gray-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
                                       >
                                         <Trash2 className="w-4 h-4" />

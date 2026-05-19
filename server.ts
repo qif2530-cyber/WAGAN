@@ -1224,15 +1224,15 @@ app.post(
           }
         }
 
-        let klingVideoPath =
-          model.includes("o1") || model.includes("omni")
-            ? "omni-video"
-            : "text2video";
-        if (
-          isKling &&
-          (req.body.referenceImage || req.body.image)
-        ) {
-          klingVideoPath = "image2video";
+        let klingVideoPath = "text2video";
+        if (isKling && (req.body.referenceVideo || req.body.video)) {
+            klingVideoPath = "video2video";
+        } else if (isKling && (req.body.referenceImage || req.body.image)) {
+            klingVideoPath = "image2video";
+        }
+        
+        if (isKling && (model.includes("o1") || model.includes("omni"))) {
+            klingVideoPath = "omni-video";
         }
 
         let submitUrl = isKling
@@ -1283,7 +1283,11 @@ app.post(
           if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
           if (req.body.videoResolution === "720p") submitBody.mode = "std";
 
-          if (req.body.referenceImage) {
+          if (req.body.referenceVideo) {
+            let vid = req.body.referenceVideo;
+            if (vid.includes("base64,")) vid = vid.split("base64,")[1];
+            submitBody.video = vid;
+          } else if (req.body.referenceImage) {
             let img = req.body.referenceImage;
             if (img.includes("base64,")) img = img.split("base64,")[1];
             submitBody.image = img;
@@ -2005,12 +2009,15 @@ app.post(
           }
         }
 
-        let klingVideoPath =
-          model.includes("o1") || model.includes("omni")
-            ? "omni-video"
-            : "text2video";
-        if (isKling && (req.body.referenceImage || req.body.image)) {
-           klingVideoPath = "image2video";
+        let klingVideoPath = "text2video";
+        if (isKling && (req.body.referenceVideo || req.body.video)) {
+            klingVideoPath = "video2video";
+        } else if (isKling && (req.body.referenceImage || req.body.image)) {
+            klingVideoPath = "image2video";
+        }
+        
+        if (isKling && (model.includes("o1") || model.includes("omni"))) {
+            klingVideoPath = "omni-video";
         }
         let submitUrl = isKling
           ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}`
@@ -2065,7 +2072,11 @@ app.post(
 
         if (isKling) {
           submitBody.model = model;
-          if (req.body.referenceImage || req.body.image) {
+          if (req.body.referenceVideo || req.body.video) {
+            let vid = req.body.referenceVideo || req.body.video;
+            if (vid.includes("base64,")) vid = vid.split("base64,")[1];
+            submitBody.video = vid;
+          } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
             if (img.includes("base64,")) img = img.split("base64,")[1];
             submitBody.image = img;
