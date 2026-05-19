@@ -790,16 +790,23 @@ export default function App() {
                             </div>
                           )}
                           {activeTab === 'kling-video' && (
-                            <div className="flex flex-wrap gap-2">
-                              <button onClick={() => setSelectedModel('kling-video-o1')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-video-o1' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                可灵 O1
-                              </button>
-                              <button onClick={() => setSelectedModel('kling-v3-omni')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-v3-omni' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                可灵 v3 Omni
-                              </button>
-                              <button onClick={() => setSelectedModel('kling-v3')} className={`px-4 py-2 text-xs rounded border transition-colors ${selectedModel === 'kling-v3' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>
-                                可灵 v3
-                              </button>
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              {/* O1 / v3 */}
+                              <button onClick={() => setSelectedModel('kling-video-o1')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-video-o1' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 O1</button>
+                              <button onClick={() => setSelectedModel('kling-v3-omni')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v3-omni' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v3 Omni</button>
+                              <button onClick={() => setSelectedModel('kling-v3')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v3' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v3</button>
+                              
+                              {/* v2 */}
+                              <button onClick={() => setSelectedModel('kling-v2-6')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v2-6' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v2.6</button>
+                              <button onClick={() => setSelectedModel('kling-v2-5-turbo')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v2-5-turbo' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v2.5 Turbo</button>
+                              <button onClick={() => setSelectedModel('kling-v2-1-master')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v2-1-master' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v2.1 Master</button>
+                              <button onClick={() => setSelectedModel('kling-v2-1')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v2-1' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v2.1</button>
+                              <button onClick={() => setSelectedModel('kling-v2-master')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v2-master' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v2 Master</button>
+                              
+                              {/* v1 */}
+                              <button onClick={() => setSelectedModel('kling-v1-6')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v1-6' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v1.6</button>
+                              <button onClick={() => setSelectedModel('kling-v1-5')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v1-5' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v1.5</button>
+                              <button onClick={() => setSelectedModel('kling-v1')} className={`px-3 py-1.5 rounded border transition-colors ${selectedModel === 'kling-v1' ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}>可灵 v1</button>
                             </div>
                           )}
                           {activeTab === 'sora' && (

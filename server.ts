@@ -1227,7 +1227,7 @@ app.post(
         let klingVideoPath = "text2video";
         if (isKling && (req.body.referenceVideo || req.body.video)) {
             klingVideoPath = "video2video";
-        } else if (isKling && (req.body.referenceImage || req.body.image)) {
+        } else if (isKling && (req.body.referenceImage || req.body.image || req.body.image_url)) {
             klingVideoPath = "image2video";
         }
 
@@ -1235,7 +1235,6 @@ app.post(
           ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}`
           : `${BASE_URL.replace(/\/$/, "")}/contents/generations/tasks`;
 
-        // Handle users putting exact endpoints into Base URL
         if (
           BASE_URL.includes("/videos/") ||
           BASE_URL.includes("/tasks") ||
@@ -1246,6 +1245,8 @@ app.post(
             submitUrl = submitUrl.replace(/\/text2video|\/image2video|\/video2video|\/omni-video/g, `/${klingVideoPath}`);
           }
         }
+        
+        let isOpenAICompatible = submitUrl.includes("/videos/generations") || submitUrl.includes("/video/generations");
 
         let seedanceResolution =
           req.body.videoResolution || req.body.resolution || "720p";
@@ -1258,50 +1259,67 @@ app.post(
         }
 
         let klingActualModelName = model;
+        // Map UI fallback model names if needed
         if (model === "kling") {
           klingActualModelName = "kling-v1-5";
         }
-
+        
         let submitBody: any = {};
 
         if (isKling) {
-          submitBody = {
-            model_name: klingActualModelName,
-            prompt: prompt,
-          };
-
-          // 可灵官方文档要求 duration 为 string："5" 或 "10"
-          submitBody.duration =
-            typeof req.body.duration !== "undefined"
-              ? String(req.body.duration)
-              : "5";
-
-          if (req.body.aspectRatio) {
-            submitBody.aspect_ratio = req.body.aspectRatio;
-          }
-          if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
-          if (req.body.videoResolution === "720p") submitBody.mode = "std";
-
-          if (req.body.referenceVideo || req.body.video) {
-            let vid = req.body.referenceVideo || req.body.video;
-            vid = vid.replace(/^data:[^,]+,/, "");
-            submitBody.video = vid;
-            delete submitBody.aspect_ratio;
-          } else if (req.body.referenceImage || req.body.image) {
-            let img = req.body.referenceImage || req.body.image;
-            img = img.replace(/^data:[^,]+,/, "");
-            submitBody.image = img;
-            delete submitBody.aspect_ratio;
-            if (model.includes("kling-v3") || model.includes("o1") || model.includes("omni")) {
-              if (submitBody.prompt && !submitBody.prompt.includes("<<<image_1>>>")) {
-                  submitBody.prompt = `<<<image_1>>> ${submitBody.prompt}`;
-              }
-            }
-            if (req.body.referenceImageTail || req.body.image_tail) {
-              let tail = req.body.referenceImageTail || req.body.image_tail;
-              tail = tail.replace(/^data:[^,]+,/, "");
-              submitBody.image_tail = tail;
-            }
+          if (isOpenAICompatible) {
+             // Use strict OpenAI format for providers like 302.ai that expose standard /v1/videos/generations endpoint for Kling
+             submitBody = {
+               model: klingActualModelName,
+               prompt: prompt || "video of this image",
+             };
+             if (req.body.aspectRatio) submitBody.aspect_ratio = req.body.aspectRatio;
+             if (req.body.duration) submitBody.duration = parseInt(req.body.duration) || 5;
+             if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
+             
+             if (req.body.referenceImage || req.body.image || req.body.image_url) {
+                const img = req.body.referenceImage || req.body.image || req.body.image_url;
+                submitBody.image_url = img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}`;
+             }
+          } else {
+             // Official Kling AI API Structure
+             submitBody = {
+               model_name: klingActualModelName,
+               // Note: some systems proxy official also require model
+               model: klingActualModelName, 
+             };
+             if (prompt) submitBody.prompt = prompt;
+             
+             submitBody.duration = typeof req.body.duration !== "undefined" ? String(req.body.duration) : "5";
+             
+             // Official Kling only accepts format depending on type
+             if (klingVideoPath === "text2video") {
+                 submitBody.aspect_ratio = req.body.aspectRatio || req.body.aspect_ratio || "16:9";
+             }
+             
+             // Setup Mode
+             if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
+             if (req.body.videoResolution === "720p") submitBody.mode = "std";
+             // Optional configuration parameters (e.g. cfg_scale: 0.5) can be added here
+             
+             if (klingVideoPath === "video2video") {
+                let vid = req.body.referenceVideo || req.body.video;
+                vid = vid.replace(/^data:[^,]+,/, "");
+                submitBody.video = vid;
+             }
+             
+             if (klingVideoPath === "image2video") {
+                let img = req.body.referenceImage || req.body.image || req.body.image_url;
+                // official Kling strictly forbids data: URI prefix, requires absolute base64 payload
+                img = img.replace(/^data:[^,]+,/, "");
+                submitBody.image = img;
+                
+                if (req.body.referenceImageTail || req.body.image_tail) {
+                   let tail = req.body.referenceImageTail || req.body.image_tail;
+                   tail = tail.replace(/^data:[^,]+,/, "");
+                   submitBody.image_tail = tail;
+                }
+             }
           }
         } else {
           submitBody = {
@@ -1312,35 +1330,22 @@ app.post(
             logo_info: { add_logo: false, is_logo_cleared: true },
             watermark: false,
           };
-          // 豆包/即梦 生成时长限制：如果模型版本需要控制
           let durationNum =
             typeof req.body.duration !== "undefined"
               ? parseInt(req.body.duration)
               : 5;
           submitBody.duration = durationNum;
 
-          if (req.body.referenceImage) {
-            submitBody.content.unshift({
-              type: "image",
-              image_url: { url: req.body.referenceImage },
-            });
+          if (req.body.referenceImage || req.body.image) {
+             const img = req.body.referenceImage || req.body.image;
+             submitBody.content.unshift({
+               type: "image",
+               image_url: { url: img },
+             });
           }
         }
 
-        const fs = require('fs');
-        fs.appendFileSync('kling_submit_debug.log', JSON.stringify({
-           keys: Object.keys(submitBody),
-           hasImage: !!submitBody.image,
-           imageStart: submitBody.image ? submitBody.image.substring(0, 50) : null,
-           klingVideoPath: klingVideoPath,
-           body: req.body,
-        }) + '\n');
-        
-        console.log("Sending request to:", submitUrl);
-        console.log("Kling submitBody payload keys:", Object.keys(submitBody));
-        if (submitBody.image) {
-            console.log("Kling submitBody.image starts with:", submitBody.image.substring(0, 50));
-        }
+        console.log(`Sending ${isKling ? "Kling" : "Jimeng"} task to: ${submitUrl}`);
         const submitResponse = await fetch(submitUrl, {
           method: "POST",
           headers: {
@@ -1359,7 +1364,7 @@ app.post(
         const taskId = isKling
           ? submitData.data?.task_id || submitData.task_id || submitData.id
           : submitData.id || submitData.task_id || submitData.data?.task_id;
-        if (!taskId) throw new Error("未能获取任务 ID (Task ID not found)");
+        if (!taskId) throw new Error("未能获取任务 ID (Task ID not found). " + JSON.stringify(submitData));
 
         console.log(
           `[Unified Gateway] Domestic Video Task submitted: ${taskId}. Polling...`,
@@ -1376,14 +1381,16 @@ app.post(
             ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}/${taskId}`
             : `${BASE_URL.replace(/\/$/, "")}/contents/generations/tasks/${taskId}`;
 
-          if (BASE_URL.includes("/videos/")) {
-            // Handles /videos/omni-video etc.
-            // Handle standard overseas API proxy proxying
+          if (isOpenAICompatible && isKling) {
+             pollUrl = `${BASE_URL.replace(/\/$/, "")}/videos/generations/${taskId}`;
+          } else if (BASE_URL.includes("/videos/")) {
+            // Handles explicit endpoints
             pollUrl = `${BASE_URL.trim().replace(/\/text2video|\/omni-video|\/image2video/g, "/tasks")}/${taskId}`;
             if (
               BASE_URL.includes("/text2video") ||
               BASE_URL.includes("/omni-video") ||
-              BASE_URL.includes("/image2video")
+              BASE_URL.includes("/image2video") ||
+              BASE_URL.includes("/video2video")
             ) {
               pollUrl = `${BASE_URL.trim()}/${taskId}`;
             }
@@ -1413,11 +1420,14 @@ app.post(
           const status = isKling
             ? pollData.data?.task_status ||
               pollData.status ||
-              (pollData.data && pollData.data.status)
+              (pollData.data && pollData.data.status) ||
+              pollData.task_status
             : pollData.status || (pollData.data && pollData.data.status);
+            
           const resultVideoUrl = isKling
             ? pollData.data?.task_result?.videos?.[0]?.url ||
               pollData.video_url ||
+              (pollData.task_result && pollData.task_result.videos?.[0]?.url) ||
               (pollData.data && (pollData.data.url || pollData.data.video_url))
             : pollData.content?.video_url ||
               pollData.video_url ||
@@ -1429,7 +1439,6 @@ app.post(
 
           console.log(
             `[Unified Gateway] Domestic Video Task ${taskId} iter status: ${status}, videoUrl: ${resultVideoUrl ? "YES" : "NO"}`,
-            pollData,
           );
 
           if (
@@ -1443,17 +1452,13 @@ app.post(
             finalVideoUrl = resultVideoUrl;
             break;
           } else if (status === "FAILURE" || status === "failed") {
-            throw new Error(
-              `生成失败: ${pollData.error?.message || "任务状态异常"}`,
-            );
+            const errReason = pollData.data?.task_status_msg || pollData.error?.message || "任务生成失败，未返回特定错误";
+            throw new Error(`生成失败: ${errReason}`);
           }
-          console.log(
-            `[Unified Gateway] Domestic Video Task ${taskId} status: ${status}...`,
-          );
         }
 
         if (!finalVideoUrl)
-          throw new Error("视频任务超时或未返回结果 (Task Timeout)");
+          throw new Error("视频任务超时或未返回结果 (Task Timeout/No URL)");
 
         const estimatedCostUsd = recordBillingLog(
           "video",
@@ -2065,6 +2070,7 @@ app.post(
 
         let submitBody: any = isKling
           ? {
+              model: klingActualModelName,
               model_name: klingActualModelName,
               prompt: prompt,
               aspect_ratio:
@@ -2098,11 +2104,6 @@ app.post(
             img = img.replace(/^data:[^,]+,/, "");
             submitBody.image = img;
             delete submitBody.aspect_ratio;
-            if (model.includes("kling-v3") || model.includes("o1") || model.includes("omni")) {
-              if (submitBody.prompt && !submitBody.prompt.includes("<<<image_1>>>")) {
-                  submitBody.prompt = `<<<image_1>>> ${submitBody.prompt}`;
-              }
-            }
             if (req.body.referenceImageTail || req.body.image_tail) {
                let tail = req.body.referenceImageTail || req.body.image_tail;
                tail = tail.replace(/^data:[^,]+,/, "");
