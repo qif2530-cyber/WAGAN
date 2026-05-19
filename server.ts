@@ -1,6 +1,6 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import { fileURLToPath } from "url";
+
 import path from "path";
 import fs from "fs";
 import cors from "cors";
@@ -41,8 +41,7 @@ function generateKlingJwt(ak: string, sk: string) {
   return `${signatureInput}.${signature}`;
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 // 工具函数：解析 Data URI 并提取 mimeType 和纯 base64 数据
 function parseDataUri(dataUri: string) {
