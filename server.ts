@@ -1230,9 +1230,7 @@ app.post(
             : "text2video";
         if (
           isKling &&
-          req.body.referenceImage &&
-          !model.includes("o1") &&
-          !model.includes("omni")
+          req.body.referenceImage
         ) {
           klingVideoPath = "image2video";
         }
@@ -1355,10 +1353,11 @@ app.post(
           if (BASE_URL.includes("/videos/")) {
             // Handles /videos/omni-video etc.
             // Handle standard overseas API proxy proxying
-            pollUrl = `${BASE_URL.trim().replace(/\/text2video|\/omni-video/g, "/tasks")}/${taskId}`;
+            pollUrl = `${BASE_URL.trim().replace(/\/text2video|\/omni-video|\/image2video/g, "/tasks")}/${taskId}`;
             if (
               BASE_URL.includes("/text2video") ||
-              BASE_URL.includes("/omni-video")
+              BASE_URL.includes("/omni-video") ||
+              BASE_URL.includes("/image2video")
             ) {
               pollUrl = `${BASE_URL.trim()}/${taskId}`;
             }
@@ -2005,6 +2004,9 @@ app.post(
           model.includes("o1") || model.includes("omni")
             ? "omni-video"
             : "text2video";
+        if (isKling && (req.body.referenceImage || req.body.image)) {
+           klingVideoPath = "image2video";
+        }
         let submitUrl = isKling
           ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}`
           : `${BASE_URL.replace(/\/$/, "")}/contents/generations/tasks`;
@@ -2097,10 +2099,11 @@ app.post(
             ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}/${taskId}`
             : `${BASE_URL.replace(/\/$/, "")}/contents/generations/tasks/${taskId}`;
           if (BASE_URL.includes("/videos/")) {
-            pollUrl = `${BASE_URL.trim().replace(/\/text2video|\/omni-video/g, "/tasks")}/${taskId}`;
+            pollUrl = `${BASE_URL.trim().replace(/\/text2video|\/omni-video|\/image2video/g, "/tasks")}/${taskId}`;
             if (
               BASE_URL.includes("/text2video") ||
-              BASE_URL.includes("/omni-video")
+              BASE_URL.includes("/omni-video") ||
+              BASE_URL.includes("/image2video")
             ) {
               pollUrl = `${BASE_URL.trim()}/${taskId}`;
             }
