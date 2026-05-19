@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 // Git sync patch applied
 import { Copy, Check, Terminal, FileCode, Coffee, Play, Image as ImageIcon, MessageSquare, Video, Info, AlertTriangle, ExternalLink, Bot, Server, Shield, Download, Trash2, Plus, Upload, Search } from 'lucide-react';
+import { KLING_MODELS, KlingMode } from './lib/kling-models';
 
 const CodeBlock = ({ title, code }: { title: string, code: string }) => {
   const [copied, setCopied] = useState(false);
@@ -132,6 +133,7 @@ export default function App() {
   const [imageSize, setImageSize] = useState('1K'); // 增加正式的 state 绑定
   const [videoResolution, setVideoResolution] = useState('720p');
   const [videoDuration, setVideoDuration] = useState(5);
+  const [klingMode, setKlingMode] = useState<KlingMode>('std');
   const [referenceVideoDuration, setReferenceVideoDuration] = useState(5);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceImageName, setReferenceImageName] = useState<string | null>(null);
@@ -494,6 +496,9 @@ export default function App() {
       if (['video', 'jimeng-video', 'kling-video', 'sora'].includes(activeTab)) {
         payload.videoResolution = videoResolution;
         payload.duration = videoDuration;
+        if (activeTab === 'kling-video') {
+           payload.klingMode = klingMode;
+        }
       }
       
       payload.actionType = activeTab;
@@ -994,13 +999,17 @@ export default function App() {
                             {/* Aspect Ratio - Common for most image/video models */}
                             {['image', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora', 'video'].includes(activeTab) && (
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3">
-                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">图片/视频比例 (Aspect Ratio)</label>
+                                <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">
+                                  图片/视频比例 (Aspect Ratio)
+                                  {(referenceImage || referenceVideo) && <span className="ml-2 text-rose-500 font-normal normal-case">* 已上传参考图/视频，将强制继承原文件比例</span>}
+                                </label>
                                 <div className="flex flex-wrap gap-2">
                                   {['1:1', '16:9', '9:16', '4:3', '3:4'].map((ratio) => (
                                     <button
                                       key={ratio}
                                       onClick={() => setAspectRatio(ratio)}
-                                      className={`px-3 py-1.5 flex-grow text-xs rounded border transition-colors cursor-pointer ${aspectRatio === ratio ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
+                                      disabled={!!referenceImage || !!referenceVideo}
+                                      className={`px-3 py-1.5 flex-grow text-xs rounded border transition-colors ${(referenceImage || referenceVideo) ? 'opacity-40 cursor-not-allowed bg-transparent border-white/5 text-gray-600' : (aspectRatio === ratio ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 cursor-pointer' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30 cursor-pointer')}`}
                                     >
                                       {ratio}
                                     </button>
@@ -1040,7 +1049,7 @@ export default function App() {
                             )}
 
                             {/* Video Resolution and Duration */}
-                            {['jimeng-video', 'kling-video'].includes(activeTab) && (
+                            {activeTab === 'jimeng-video' && (
                               <>
                                 <div className="bg-black/30 border border-white/5 rounded-lg p-3">
                                   <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">输出分辨率 (Video Resolution)</label>
@@ -1049,7 +1058,6 @@ export default function App() {
                                       // seedance 2.0 fast does not support 1080p
                                       const isFast = selectedModel.includes('fast');
                                       const disabled = isFast && res === '1080p';
-                                      const displayLabel = activeTab === 'kling-video' ? (res === '1080p' ? '1080p (Pro)' : (res === '720p' ? '720p (Std)' : res)) : res;
                                       return (
                                         <button
                                           key={res}
@@ -1057,7 +1065,7 @@ export default function App() {
                                           disabled={disabled}
                                           className={`flex-1 py-1.5 text-[10px] font-mono rounded border transition-colors ${disabled ? 'opacity-30 cursor-not-allowed bg-black/40 border-white/5 text-gray-600' : videoResolution === res ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 cursor-pointer' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30 cursor-pointer'}`}
                                         >
-                                          {displayLabel}
+                                          {res}
                                         </button>
                                       );
                                     })}
@@ -1069,15 +1077,7 @@ export default function App() {
                                     <span className="text-xs text-indigo-400 font-mono">{videoDuration === -1 ? 'Auto' : `${videoDuration}s`}</span>
                                   </div>
                                   <div className="flex gap-2">
-                                    {activeTab === 'kling-video' ? [5, 10].map((duration) => (
-                                      <button
-                                        key={duration}
-                                        onClick={() => setVideoDuration(duration)}
-                                        className={`flex-1 py-1.5 text-xs rounded border transition-colors cursor-pointer ${videoDuration === duration ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30'}`}
-                                      >
-                                        {duration} 秒
-                                      </button>
-                                    )) : [4, 5, 10, 15, -1].map((duration) => (
+                                    {[4, 5, 10, 15, -1].map((duration) => (
                                       <button
                                         key={duration}
                                         onClick={() => setVideoDuration(duration)}
@@ -1089,6 +1089,66 @@ export default function App() {
                                   </div>
                                 </div>
                               </>
+                            )}
+
+                            {activeTab === 'kling-video' && KLING_MODELS[selectedModel] && (
+                              (() => {
+                                 const config = KLING_MODELS[selectedModel];
+                                 const modes = Object.keys(config.modes) as KlingMode[];
+                                 // Auto fallback to first mode if current mode not available
+                                 const activeMode = modes.includes(klingMode) ? klingMode : modes[0];
+                                 const features = config.modes[activeMode]!;
+                                 
+                                 // Sync klingMode silently if changed
+                                 if (activeMode !== klingMode) {
+                                    setTimeout(() => setKlingMode(activeMode), 0);
+                                 }
+
+                                 return (
+                                   <>
+                                      <div className="bg-black/30 border border-white/5 rounded-lg p-3 md:col-span-2">
+                                         <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">选择模式: {config.name}</label>
+                                         <div className="flex flex-wrap gap-2">
+                                           {modes.map((m) => {
+                                              const feature = config.modes[m]!;
+                                              return (
+                                                <button
+                                                  key={m}
+                                                  onClick={() => setKlingMode(m)}
+                                                  className={`flex-1 py-2 text-xs rounded border transition-colors cursor-pointer ${activeMode === m ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 outline-none'}`}
+                                                >
+                                                  {m === 'none' ? '默认模式' : m.toUpperCase()} ({feature.resolution} / {feature.framerate})
+                                                </button>
+                                              )
+                                           })}
+                                         </div>
+                                      </div>
+                                      <div className="bg-black/30 border border-white/5 rounded-lg p-3 md:col-span-2">
+                                          <div className="flex justify-between items-center mb-2">
+                                            <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider">生成时长 (Video Duration)</label>
+                                            <span className="text-xs text-indigo-400 font-mono">{videoDuration}s</span>
+                                          </div>
+                                          <div className="flex gap-2">
+                                            {features.allowedDurations.map((duration) => (
+                                              <button
+                                                key={duration}
+                                                onClick={() => setVideoDuration(duration)}
+                                                className={`flex-1 py-1.5 text-xs rounded border transition-colors cursor-pointer ${videoDuration === duration ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 outline-none'}`}
+                                              >
+                                                {duration} 秒
+                                              </button>
+                                            ))}
+                                          </div>
+                                      </div>
+                                      <div className="bg-black/30 border border-white/5 rounded-lg p-3 md:col-span-2 flex flex-wrap gap-2 text-[10px] text-gray-400">
+                                          <span className="bg-white/5 px-2 py-1 rounded">M2V: {config.supportedTaskTypes.includes('m2v') ? '✅' : '❌'}</span>
+                                          <span className="bg-white/5 px-2 py-1 rounded">I2V: {config.supportedTaskTypes.includes('i2v') ? '✅' : '❌'}</span>
+                                          <span className="bg-white/5 px-2 py-1 rounded">首尾帧: {features.firstLastFrame ? '✅' : '❌'}</span>
+                                          <span className="bg-white/5 px-2 py-1 rounded">运镜/控制: {features.audioControl || features.motionControl || features.videoReference ? '✅' : '❌'}</span>
+                                      </div>
+                                   </>
+                                 );
+                              })()
                             )}
                           </div>
                         )}

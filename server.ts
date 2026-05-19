@@ -1252,7 +1252,7 @@ app.post(
             klingVideoPath = "image2video";
         }
         
-        if (isKling && klingActualModelName === "kling-v3-omni") {
+        if (isKling && (model === "kling-v3-omni" || model === "kling-video-o1")) {
             klingVideoPath = "omni-video";
         }
 
@@ -1310,31 +1310,38 @@ app.post(
              submitBody.duration = typeof req.body.duration !== "undefined" ? String(req.body.duration) : "5";
              
              // Official Kling only accepts format depending on type
-             if (klingVideoPath === "text2video") {
+             if (klingVideoPath === "text2video" || klingVideoPath === "omni-video") {
                  submitBody.aspect_ratio = req.body.aspectRatio || req.body.aspect_ratio || "16:9";
              }
              
              // Setup Mode
-             if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
-             if (req.body.videoResolution === "720p") submitBody.mode = "std";
+             if (req.body.klingMode && req.body.klingMode !== "none") submitBody.mode = req.body.klingMode;
+             else if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
+             else if (req.body.videoResolution === "720p") submitBody.mode = "std";
+             else if (req.body.videoResolution === "4k") submitBody.mode = "4k";
              // Optional configuration parameters (e.g. cfg_scale: 0.5) can be added here
              
-             if (klingVideoPath === "video2video") {
+             if (klingVideoPath === "video2video" || (klingVideoPath === "omni-video" && (req.body.referenceVideo || req.body.video))) {
                 let vid = req.body.referenceVideo || req.body.video;
-                vid = vid.replace(/^data:[^,]+,/, "");
-                submitBody.video = vid;
+                if (vid) {
+                    vid = vid.replace(/^data:[^,]+,/, "");
+                    submitBody.video = vid;
+                    delete submitBody.aspect_ratio;
+                }
              }
              
-             if (klingVideoPath === "image2video") {
+             if (klingVideoPath === "image2video" || (klingVideoPath === "omni-video" && (req.body.referenceImage || req.body.image || req.body.image_url))) {
                 let img = req.body.referenceImage || req.body.image || req.body.image_url;
-                // official Kling strictly forbids data: URI prefix, requires absolute base64 payload
-                img = img.replace(/^data:[^,]+,/, "");
-                submitBody.image = img;
-                
-                if (req.body.referenceImageTail || req.body.image_tail) {
-                   let tail = req.body.referenceImageTail || req.body.image_tail;
-                   tail = tail.replace(/^data:[^,]+,/, "");
-                   submitBody.image_tail = tail;
+                if (img) {
+                    img = img.replace(/^data:[^,]+,/, "");
+                    submitBody.image = img;
+                    delete submitBody.aspect_ratio;
+                    
+                    if (req.body.referenceImageTail || req.body.image_tail) {
+                       let tail = req.body.referenceImageTail || req.body.image_tail;
+                       tail = tail.replace(/^data:[^,]+,/, "");
+                       submitBody.image_tail = tail;
+                    }
                 }
              }
           }
@@ -2061,7 +2068,7 @@ app.post(
             klingVideoPath = "image2video";
         }
         
-        if (isKling && klingActualModelName === "kling-v3-omni") {
+        if (isKling && (model === "kling-v3-omni" || model === "kling-video-o1")) {
             klingVideoPath = "omni-video";
         }
 
@@ -2103,12 +2110,14 @@ app.post(
             };
             
             // Only text2video gets aspect_ratio
-            if (klingVideoPath === "text2video") {
+            if (klingVideoPath === "text2video" || klingVideoPath === "omni-video") {
                submitBody.aspect_ratio = req.body.aspectRatio || req.body.aspect_ratio || "16:9";
             }
             
-            if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
-            if (req.body.videoResolution === "720p") submitBody.mode = "std";
+            if (req.body.klingMode && req.body.klingMode !== "none") submitBody.mode = req.body.klingMode;
+            else if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
+            else if (req.body.videoResolution === "720p") submitBody.mode = "std";
+            else if (req.body.videoResolution === "4k") submitBody.mode = "4k";
         } else {
             submitBody = {
               model: model,
