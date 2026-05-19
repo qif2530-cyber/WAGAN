@@ -1230,7 +1230,7 @@ app.post(
             : "text2video";
         if (
           isKling &&
-          req.body.referenceImage
+          (req.body.referenceImage || req.body.image)
         ) {
           klingVideoPath = "image2video";
         }
