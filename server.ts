@@ -1230,10 +1230,6 @@ app.post(
         } else if (isKling && (req.body.referenceImage || req.body.image)) {
             klingVideoPath = "image2video";
         }
-        
-        if (isKling && (model.includes("o1") || model.includes("omni"))) {
-            klingVideoPath = "omni-video";
-        }
 
         let submitUrl = isKling
           ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}`
@@ -1283,21 +1279,22 @@ app.post(
           if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
           if (req.body.videoResolution === "720p") submitBody.mode = "std";
 
-          if (req.body.referenceVideo) {
-            let vid = req.body.referenceVideo;
+          if (req.body.referenceVideo || req.body.video) {
+            let vid = req.body.referenceVideo || req.body.video;
             if (vid.includes("base64,")) vid = vid.split("base64,")[1];
             submitBody.video = vid;
-          } else if (req.body.referenceImage) {
-            let img = req.body.referenceImage;
+            delete submitBody.aspect_ratio;
+          } else if (req.body.referenceImage || req.body.image) {
+            let img = req.body.referenceImage || req.body.image;
             if (img.includes("base64,")) img = img.split("base64,")[1];
             submitBody.image = img;
-            if (req.body.referenceImageTail) {
-              let tail = req.body.referenceImageTail;
+            delete submitBody.aspect_ratio;
+            if (req.body.referenceImageTail || req.body.image_tail) {
+              let tail = req.body.referenceImageTail || req.body.image_tail;
               if (tail.includes("base64,")) tail = tail.split("base64,")[1];
               submitBody.image_tail = tail;
             }
           }
-          submitBody.model = model; // For proxy compatibility
         } else {
           submitBody = {
             model: model,
@@ -2015,10 +2012,7 @@ app.post(
         } else if (isKling && (req.body.referenceImage || req.body.image)) {
             klingVideoPath = "image2video";
         }
-        
-        if (isKling && (model.includes("o1") || model.includes("omni"))) {
-            klingVideoPath = "omni-video";
-        }
+
         let submitUrl = isKling
           ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}`
           : `${BASE_URL.replace(/\/$/, "")}/contents/generations/tasks`;
@@ -2054,8 +2048,8 @@ app.post(
                 req.body.aspectRatio || req.body.aspect_ratio || "16:9",
               duration:
                 typeof req.body.duration !== "undefined"
-                  ? parseInt(req.body.duration)
-                  : 5,
+                  ? String(req.body.duration)
+                  : "5",
             }
           : {
               model: model,
@@ -2071,15 +2065,16 @@ app.post(
             };
 
         if (isKling) {
-          submitBody.model = model;
           if (req.body.referenceVideo || req.body.video) {
             let vid = req.body.referenceVideo || req.body.video;
             if (vid.includes("base64,")) vid = vid.split("base64,")[1];
             submitBody.video = vid;
+            delete submitBody.aspect_ratio;
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
             if (img.includes("base64,")) img = img.split("base64,")[1];
             submitBody.image = img;
+            delete submitBody.aspect_ratio;
             if (req.body.referenceImageTail || req.body.image_tail) {
                let tail = req.body.referenceImageTail || req.body.image_tail;
                if (tail.includes("base64,")) tail = tail.split("base64,")[1];
