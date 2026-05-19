@@ -6,7 +6,7 @@
 
 # 配置区域
 # ==========================================
-GIT_REPO_URL="" # TODO: 在这里填入你的 Gitee 仓库地址，例如：https://gitee.com/your-name/your-repo.git
+GIT_REPO_URL="https://gitee.com/jepow/WAGAN.git" # TODO: 在这里填入你的 Gitee 仓库地址，例如：https://gitee.com/your-name/your-repo.git
 BRANCH_NAME="main" # 分支名，如果在 Gitee 默认是 master 或者 main，请自行确认
 APP_DIR="/opt/unified-gateway-app" # 应用存放和打包的目录
 APP_NAME="ai-unified-gateway" # PM2 中的服务名字

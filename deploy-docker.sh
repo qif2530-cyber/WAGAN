@@ -7,7 +7,7 @@
 
 # 配置区域
 # ==========================================
-GIT_REPO_URL="" # TODO: 在这里填入你的 Gitee 仓库地址
+GIT_REPO_URL="https://gitee.com/jepow/WAGAN.git" # TODO: 在这里填入你的 Gitee 仓库地址
 BRANCH_NAME="main"
 APP_DIR="/opt/unified-gateway-docker"
 # ==========================================
