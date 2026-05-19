@@ -1242,6 +1242,9 @@ app.post(
           (!isKling && BASE_URL.includes("/video/"))
         ) {
           submitUrl = BASE_URL.trim();
+          if (isKling) {
+            submitUrl = submitUrl.replace(/\/text2video|\/image2video|\/video2video|\/omni-video/g, `/${klingVideoPath}`);
+          }
         }
 
         let seedanceResolution =
@@ -2026,6 +2029,9 @@ app.post(
           (!isKling && BASE_URL.includes("/video/"))
         ) {
           submitUrl = BASE_URL.trim();
+          if (isKling) {
+            submitUrl = submitUrl.replace(/\/text2video|\/image2video|\/video2video|\/omni-video/g, `/${klingVideoPath}`);
+          }
         }
 
         let seedanceResolution =
