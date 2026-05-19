@@ -776,6 +776,7 @@ app.post(
   mediaConcurrencyLimiter,
   requireAuth,
   async (req, res) => {
+    let submitUrl = "";
     try {
       let { model, prompt } = req.body;
 
@@ -1238,14 +1239,24 @@ app.post(
           }
         }
 
+        let klingActualModelName = model;
+        // Map UI fallback model names if needed
+        if (model === "kling") {
+          klingActualModelName = "kling-v1-5";
+        }
+
         let klingVideoPath = "text2video";
         if (isKling && (req.body.referenceVideo || req.body.video)) {
             klingVideoPath = "video2video";
         } else if (isKling && (req.body.referenceImage || req.body.image || req.body.image_url)) {
             klingVideoPath = "image2video";
         }
+        
+        if (isKling && klingActualModelName === "kling-v3-omni") {
+            klingVideoPath = "omni-video";
+        }
 
-        let submitUrl = isKling
+        submitUrl = isKling
           ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}`
           : `${BASE_URL.replace(/\/$/, "")}/contents/generations/tasks`;
 
@@ -1272,12 +1283,6 @@ app.post(
           seedanceResolution = "720p";
         }
 
-        let klingActualModelName = model;
-        // Map UI fallback model names if needed
-        if (model === "kling") {
-          klingActualModelName = "kling-v1-5";
-        }
-        
         let submitBody: any = {};
 
         if (isKling) {
@@ -1299,8 +1304,6 @@ app.post(
              // Official Kling AI API Structure
              submitBody = {
                model_name: klingActualModelName,
-               // Note: some systems proxy official also require model
-               model: klingActualModelName, 
              };
              if (prompt) submitBody.prompt = prompt;
              
@@ -1597,7 +1600,7 @@ app.post(
         false,
         "/api/v1/generate",
         req.body?.model,
-        "fetch failed: unknown URL - " + error.message,
+        "fetch failed on " + (submitUrl || "unknown URL") + ": " + error.message,
         Object.keys(error).length === 0 ? error.message : error,
         req,
       );
@@ -1851,6 +1854,7 @@ app.post(
   mediaConcurrencyLimiter,
   requireAuth,
   async (req, res) => {
+    let submitUrl = "";
     try {
       let {
         prompt,
@@ -2045,14 +2049,23 @@ app.post(
           }
         }
 
+        let klingActualModelName = model;
+        if (model === "kling") {
+          klingActualModelName = "kling-v1-5";
+        }
+
         let klingVideoPath = "text2video";
         if (isKling && (req.body.referenceVideo || req.body.video)) {
             klingVideoPath = "video2video";
         } else if (isKling && (req.body.referenceImage || req.body.image)) {
             klingVideoPath = "image2video";
         }
+        
+        if (isKling && klingActualModelName === "kling-v3-omni") {
+            klingVideoPath = "omni-video";
+        }
 
-        let submitUrl = isKling
+        submitUrl = isKling
           ? `${BASE_URL.replace(/\/$/, "")}/videos/${klingVideoPath}`
           : `${BASE_URL.replace(/\/$/, "")}/contents/generations/tasks`;
 
@@ -2077,24 +2090,27 @@ app.post(
           seedanceResolution = "720p";
         }
 
-        let klingActualModelName = model;
-        if (model === "kling") {
-          klingActualModelName = "kling-v1-5";
-        }
-
-        let submitBody: any = isKling
-          ? {
-              model: klingActualModelName,
+        let submitBody: any = {};
+        
+        if (isKling) {
+            submitBody = {
               model_name: klingActualModelName,
               prompt: prompt,
-              aspect_ratio:
-                req.body.aspectRatio || req.body.aspect_ratio || "16:9",
               duration:
                 typeof req.body.duration !== "undefined"
                   ? String(req.body.duration)
                   : "5",
+            };
+            
+            // Only text2video gets aspect_ratio
+            if (klingVideoPath === "text2video") {
+               submitBody.aspect_ratio = req.body.aspectRatio || req.body.aspect_ratio || "16:9";
             }
-          : {
+            
+            if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
+            if (req.body.videoResolution === "720p") submitBody.mode = "std";
+        } else {
+            submitBody = {
               model: model,
               content: [{ type: "text", text: prompt }],
               ratio: req.body.aspectRatio || req.body.aspect_ratio || "16:9",
@@ -2106,6 +2122,7 @@ app.post(
               logo_info: { add_logo: false, is_logo_cleared: true },
               watermark: false,
             };
+        }
 
         if (isKling) {
           if (req.body.referenceVideo || req.body.video) {
