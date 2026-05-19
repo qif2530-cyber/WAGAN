@@ -1284,17 +1284,22 @@ app.post(
 
           if (req.body.referenceVideo || req.body.video) {
             let vid = req.body.referenceVideo || req.body.video;
-            vid = vid.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
+            vid = vid.replace(/^data:[^,]+,/, "");
             submitBody.video = vid;
             delete submitBody.aspect_ratio;
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
-            img = img.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
+            img = img.replace(/^data:[^,]+,/, "");
             submitBody.image = img;
             delete submitBody.aspect_ratio;
+            if (model.includes("kling-v3") || model.includes("o1") || model.includes("omni")) {
+              if (submitBody.prompt && !submitBody.prompt.includes("<<<image_1>>>")) {
+                  submitBody.prompt = `<<<image_1>>> ${submitBody.prompt}`;
+              }
+            }
             if (req.body.referenceImageTail || req.body.image_tail) {
               let tail = req.body.referenceImageTail || req.body.image_tail;
-              tail = tail.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
+              tail = tail.replace(/^data:[^,]+,/, "");
               submitBody.image_tail = tail;
             }
           }
@@ -1322,6 +1327,15 @@ app.post(
           }
         }
 
+        const fs = require('fs');
+        fs.appendFileSync('kling_submit_debug.log', JSON.stringify({
+           keys: Object.keys(submitBody),
+           hasImage: !!submitBody.image,
+           imageStart: submitBody.image ? submitBody.image.substring(0, 50) : null,
+           klingVideoPath: klingVideoPath,
+           body: req.body,
+        }) + '\n');
+        
         console.log("Sending request to:", submitUrl);
         console.log("Kling submitBody payload keys:", Object.keys(submitBody));
         if (submitBody.image) {
@@ -2076,17 +2090,22 @@ app.post(
         if (isKling) {
           if (req.body.referenceVideo || req.body.video) {
             let vid = req.body.referenceVideo || req.body.video;
-            vid = vid.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
+            vid = vid.replace(/^data:[^,]+,/, "");
             submitBody.video = vid;
             delete submitBody.aspect_ratio;
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
-            img = img.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
+            img = img.replace(/^data:[^,]+,/, "");
             submitBody.image = img;
             delete submitBody.aspect_ratio;
+            if (model.includes("kling-v3") || model.includes("o1") || model.includes("omni")) {
+              if (submitBody.prompt && !submitBody.prompt.includes("<<<image_1>>>")) {
+                  submitBody.prompt = `<<<image_1>>> ${submitBody.prompt}`;
+              }
+            }
             if (req.body.referenceImageTail || req.body.image_tail) {
                let tail = req.body.referenceImageTail || req.body.image_tail;
-               tail = tail.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
+               tail = tail.replace(/^data:[^,]+,/, "");
                submitBody.image_tail = tail;
             }
           }
