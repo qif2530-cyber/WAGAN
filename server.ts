@@ -89,10 +89,15 @@ let runtimeWhitelist = (process.env.IP_WHITELIST || "127.0.0.1,::1")
   .map((ip) => ip.trim());
 
 // Load overrides from config.json if it exists
+const CONFIG_PATH = process.env.NODE_ENV === "production" ? path.join(process.cwd(), "data", "wagan_config.json") : "wagan_config.json";
+
 try {
-  if (fs.existsSync("wagan_config.json")) {
+  if (!fs.existsSync(path.dirname(CONFIG_PATH)) && process.env.NODE_ENV === "production") {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  }
+  if (fs.existsSync(CONFIG_PATH)) {
     const savedConfig = JSON.parse(
-      fs.readFileSync("wagan_config.json", "utf8"),
+      fs.readFileSync(CONFIG_PATH, "utf8"),
     );
     if (savedConfig.runtimeGeminiKey)
       runtimeGeminiKey = savedConfig.runtimeGeminiKey;
@@ -130,8 +135,11 @@ try {
 
 function saveConfigToFile() {
   try {
+    if (!fs.existsSync(path.dirname(CONFIG_PATH)) && process.env.NODE_ENV === "production") {
+      fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    }
     fs.writeFileSync(
-      "wagan_config.json",
+      CONFIG_PATH,
       JSON.stringify(
         {
           runtimeGeminiKey,
@@ -340,10 +348,13 @@ function mediaConcurrencyLimiter(
 let billingLogs: any[] = [];
 let dispatchLogs: any[] = [];
 
+const BILLING_LOGS_PATH = process.env.NODE_ENV === "production" ? path.join(process.cwd(), "data", "wagan_billing_logs.json") : "wagan_billing_logs.json";
+const DISPATCH_LOGS_PATH = process.env.NODE_ENV === "production" ? path.join(process.cwd(), "data", "wagan_dispatch_logs.json") : "wagan_dispatch_logs.json";
+
 try {
-  if (fs.existsSync("wagan_billing_logs.json")) {
+  if (fs.existsSync(BILLING_LOGS_PATH)) {
     billingLogs = JSON.parse(
-      fs.readFileSync("wagan_billing_logs.json", "utf8"),
+      fs.readFileSync(BILLING_LOGS_PATH, "utf8"),
     );
   }
 } catch (e) {
@@ -351,9 +362,9 @@ try {
 }
 
 try {
-  if (fs.existsSync("wagan_dispatch_logs.json")) {
+  if (fs.existsSync(DISPATCH_LOGS_PATH)) {
     dispatchLogs = JSON.parse(
-      fs.readFileSync("wagan_dispatch_logs.json", "utf8"),
+      fs.readFileSync(DISPATCH_LOGS_PATH, "utf8"),
     );
   }
 } catch (e) {
@@ -361,15 +372,19 @@ try {
 }
 
 function saveLogsToFile() {
+  if (process.env.NODE_ENV === "production") {
+    const dir = path.dirname(BILLING_LOGS_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  }
   fs.writeFile(
-    "wagan_billing_logs.json",
+    BILLING_LOGS_PATH,
     JSON.stringify(billingLogs, null, 2),
     (err) => {
       if (err) console.error("Failed to save billing logs", err);
     },
   );
   fs.writeFile(
-    "wagan_dispatch_logs.json",
+    DISPATCH_LOGS_PATH,
     JSON.stringify(dispatchLogs, null, 2),
     (err) => {
       if (err) console.error("Failed to save dispatch logs", err);
@@ -3176,9 +3191,10 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Production: serve built static files
-    app.use(express.static(path.join(__dirname, "dist")));
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
