@@ -1281,17 +1281,14 @@ app.post(
 
           if (req.body.referenceVideo || req.body.video) {
             let vid = req.body.referenceVideo || req.body.video;
-            if (vid.includes("base64,")) vid = vid.split("base64,")[1];
             submitBody.video = vid;
             delete submitBody.aspect_ratio;
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
-            if (img.includes("base64,")) img = img.split("base64,")[1];
             submitBody.image = img;
             delete submitBody.aspect_ratio;
             if (req.body.referenceImageTail || req.body.image_tail) {
               let tail = req.body.referenceImageTail || req.body.image_tail;
-              if (tail.includes("base64,")) tail = tail.split("base64,")[1];
               submitBody.image_tail = tail;
             }
           }
@@ -2067,17 +2064,14 @@ app.post(
         if (isKling) {
           if (req.body.referenceVideo || req.body.video) {
             let vid = req.body.referenceVideo || req.body.video;
-            if (vid.includes("base64,")) vid = vid.split("base64,")[1];
             submitBody.video = vid;
             delete submitBody.aspect_ratio;
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
-            if (img.includes("base64,")) img = img.split("base64,")[1];
             submitBody.image = img;
             delete submitBody.aspect_ratio;
             if (req.body.referenceImageTail || req.body.image_tail) {
                let tail = req.body.referenceImageTail || req.body.image_tail;
-               if (tail.includes("base64,")) tail = tail.split("base64,")[1];
                submitBody.image_tail = tail;
             }
           }
