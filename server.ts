@@ -1285,13 +1285,10 @@ app.post(
           if (req.body.videoResolution === "1080p") submitBody.mode = "pro";
           if (req.body.videoResolution === "720p") submitBody.mode = "std";
 
-          if (klingVideoPath === "image2video" && req.body.referenceImage) {
+          if (req.body.referenceImage) {
             submitBody.image = req.body.referenceImage;
             if (req.body.referenceImageTail)
               submitBody.image_tail = req.body.referenceImageTail;
-
-            // 官方部分接口 image2video 可能不支持 aspect_ratio，由原图决定，这里可选删除
-            // delete submitBody.aspect_ratio;
           }
           submitBody.model = model; // For proxy compatibility
         } else {
@@ -2061,6 +2058,12 @@ app.post(
 
         if (isKling) {
           submitBody.model = model;
+          if (req.body.referenceImage || req.body.image) {
+            submitBody.image = req.body.referenceImage || req.body.image;
+            if (req.body.referenceImageTail || req.body.image_tail) {
+               submitBody.image_tail = req.body.referenceImageTail || req.body.image_tail;
+            }
+          }
         }
 
         const submitResponse = await fetch(submitUrl, {
@@ -2860,20 +2863,72 @@ app.post(
       let videoBytesBase64 = videoObj?.videoBytes;
 
       if (!videoBytesBase64 && videoObj) {
-        console.log(`[API] Video generated, using ai.files.download to fetch content...`);
+        console.log(`[API] Video generated (URI: ${downloadLink}), attempting to fetch content...`);
         const tempPath = path.join("/tmp", `veo_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`);
+        let downloadSuccess = false;
+
+        // Try 1: Official SDK
         try {
           await ai.files.download({ file: videoObj, downloadPath: tempPath });
-          const videoBuffer = fs.readFileSync(tempPath);
-          videoBytesBase64 = videoBuffer.toString("base64");
-          fs.unlinkSync(tempPath);
+          downloadSuccess = true;
+          console.log("[API] Downloaded via ai.files.download successfully.");
         } catch (e: any) {
-          console.error("[API] Failed to download video via sdk:", e);
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-          return res.status(500).json({
-            success: false,
-            error: `获取视频内容失败: ${e.message}`,
-          });
+          console.error(`[API] ai.files.download failed: ${e.message}. Retrying via manual fetch...`);
+        }
+
+        // Try 2: Manual fetch with ?alt=media (Generative Language API behavior)
+        if (!downloadSuccess && downloadLink) {
+          try {
+            console.log(`[API] Attempting manual direct fetch to ${downloadLink}`);
+            let urlToFetch = downloadLink;
+            if (urlToFetch.includes("generativelanguage.googleapis.com")) {
+               urlToFetch = urlToFetch.includes("?") ? `${urlToFetch}&alt=media` : `${urlToFetch}?alt=media`;
+            }
+
+            // Always pass the API key in the header since we only have API key auth
+            const fetchOpts = {
+              method: "GET",
+              headers: { "x-goog-api-key": runtimeGeminiKey }
+            };
+
+            let resAsync = await fetch(urlToFetch, fetchOpts);
+            if (!resAsync.ok && resAsync.status === 403) {
+                console.log(`[API] Fetch with header failed (403). Trying without header...`);
+                resAsync = await fetch(downloadLink, { method: "GET" });
+            }
+            if (!resAsync.ok && resAsync.status === 403) {
+                console.log(`[API] Fetch without header failed (403). Trying with URL param key...`);
+                const urlWithKey = urlToFetch.includes("?") ? `${urlToFetch}&key=${runtimeGeminiKey}` : `${urlToFetch}?key=${runtimeGeminiKey}`;
+                resAsync = await fetch(urlWithKey, { method: "GET" });
+            }
+
+            if (resAsync.ok) {
+              const arrayBuffer = await resAsync.arrayBuffer();
+              fs.writeFileSync(tempPath, Buffer.from(arrayBuffer));
+              downloadSuccess = true;
+              console.log("[API] Downloaded via manual fetch successfully.");
+            } else {
+               console.error(`[API] Manual fetch failed: ${resAsync.status} ${resAsync.statusText}`);
+               let errBody = "";
+               try { errBody = await resAsync.text(); } catch(e) {}
+               console.error(`[API] Manual fetch error body: ${errBody}`);
+            }
+          } catch(e: any) {
+             console.error("[API] Manual fetch threw error:", e);
+          }
+        }
+        
+        if (downloadSuccess && fs.existsSync(tempPath)) {
+            const videoBuffer = fs.readFileSync(tempPath);
+            videoBytesBase64 = videoBuffer.toString("base64");
+            fs.unlinkSync(tempPath);
+        } else {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            return res.status(500).json({
+                success: false,
+                error: `获取视频内容失败: 请检查 API Key 权限或稍后重试。`,
+                details: "All download attempts failed."
+            });
         }
       }
 
