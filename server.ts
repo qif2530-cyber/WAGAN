@@ -1281,17 +1281,17 @@ app.post(
 
           if (req.body.referenceVideo || req.body.video) {
             let vid = req.body.referenceVideo || req.body.video;
-            if (vid.includes("base64,")) vid = vid.split("base64,")[1];
+            vid = vid.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
             submitBody.video = vid;
             delete submitBody.aspect_ratio;
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
-            if (img.includes("base64,")) img = img.split("base64,")[1];
+            img = img.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
             submitBody.image = img;
             delete submitBody.aspect_ratio;
             if (req.body.referenceImageTail || req.body.image_tail) {
               let tail = req.body.referenceImageTail || req.body.image_tail;
-              if (tail.includes("base64,")) tail = tail.split("base64,")[1];
+              tail = tail.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
               submitBody.image_tail = tail;
             }
           }
@@ -1320,7 +1320,10 @@ app.post(
         }
 
         console.log("Sending request to:", submitUrl);
-        console.log("Sending request to:", submitUrl);
+        console.log("Kling submitBody payload keys:", Object.keys(submitBody));
+        if (submitBody.image) {
+            console.log("Kling submitBody.image starts with:", submitBody.image.substring(0, 50));
+        }
         const submitResponse = await fetch(submitUrl, {
           method: "POST",
           headers: {
@@ -2067,22 +2070,27 @@ app.post(
         if (isKling) {
           if (req.body.referenceVideo || req.body.video) {
             let vid = req.body.referenceVideo || req.body.video;
-            if (vid.includes("base64,")) vid = vid.split("base64,")[1];
+            vid = vid.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
             submitBody.video = vid;
             delete submitBody.aspect_ratio;
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
-            if (img.includes("base64,")) img = img.split("base64,")[1];
+            img = img.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
             submitBody.image = img;
             delete submitBody.aspect_ratio;
             if (req.body.referenceImageTail || req.body.image_tail) {
                let tail = req.body.referenceImageTail || req.body.image_tail;
-               if (tail.includes("base64,")) tail = tail.split("base64,")[1];
+               tail = tail.replace(/^data:[a-zA-Z0-9\/\-\+]+;base64,\s*/, "");
                submitBody.image_tail = tail;
             }
           }
         }
 
+        console.log("Sending request to:", submitUrl);
+        console.log("Chat Kling submitBody keys:", Object.keys(submitBody));
+        if (submitBody.image) {
+             console.log("Chat Kling submitBody.image starts with:", submitBody.image.substring(0, 50));
+        }
         const submitResponse = await fetch(submitUrl, {
           method: "POST",
           headers: {
