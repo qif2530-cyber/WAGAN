@@ -86,26 +86,36 @@ function ensurePublicUrl(req: any, input: string | null | undefined): string | n
     const filePath = path.join(tempDir, fileName);
     fs.writeFileSync(filePath, Buffer.from(parsed.data, "base64"));
     
-    // Attempt real public upload to Litterbox so that external video/image generation APIs (like Kling)
-    // can access the resource, since our own Dev/Pre preview domain requires Google authenticated session.
-    try {
-      const uploadCmd = `curl -s -X POST -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@${filePath}" https://litterbox.catbox.moe/resources/internals/api.php`;
-      const stdout = execSync(uploadCmd, { timeout: 15000 }).toString().trim();
-      if (stdout && stdout.startsWith("https://")) {
-        console.log(`[Public Asset Host] Successfully uploaded to Litterbox (valid for 1h): ${stdout}`);
-        // Remove local file to avoid server storage buildup
-        try { fs.unlinkSync(filePath); } catch (u) {}
-        return stdout;
-      } else {
-        console.warn(`[Public Asset Host Warning] Litterbox responded with non-url: ${stdout}`);
+    const host = req.get("host") || "";
+    // Check if we are running in the isolated, authenticated AI Studio sandbox environment (e.g., in previews)
+    const isSandboxedAiStudio = host.includes("ais-") || host.includes("run.app") || host.includes("google") || host.includes("localhost") || host.includes("127.0.0.1");
+
+    if (isSandboxedAiStudio) {
+      // Must use public host upload since sandbox is private and unreachable from outside.
+      try {
+        const uploadCmd = `curl -s -X POST -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@${filePath}" https://litterbox.catbox.moe/resources/internals/api.php`;
+        const stdout = execSync(uploadCmd, { timeout: 15000 }).toString().trim();
+        if (stdout && stdout.startsWith("https://")) {
+          console.log(`[Public Asset Host] Successfully uploaded to Litterbox (valid for 1h): ${stdout}`);
+          // Remove local file to avoid server storage buildup
+          try { fs.unlinkSync(filePath); } catch (u) {}
+          return stdout;
+        } else {
+          console.warn(`[Public Asset Host Warning] Litterbox responded with non-url: ${stdout}`);
+        }
+      } catch (uploadErr) {
+        console.warn("[Public Asset Host Error] Litterbox synchronous upload failed, falling back to local host:", uploadErr);
       }
-    } catch (uploadErr) {
-      console.warn("[Public Asset Host Error] Litterbox synchronous upload failed, falling back to local host:", uploadErr);
+    } else {
+      console.log(`[Public Asset Host] Server is running on a public host/IP (${host}), bypassing external hosting to avoid Great Firewall blocks.`);
     }
 
-    const protocol = req.headers["x-forwarded-proto"] || "https";
-    const host = req.get("host");
-    return `${protocol}://${host}/temp/${fileName}`;
+    // Fallback or default for self-hosted setup (public IP/domain)
+    // Make sure to detect protocol properly (HTTP vs HTTPS)
+    const reqProtocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+    const localUrl = `${reqProtocol}://${host}/temp/${fileName}`;
+    console.log(`[Public Asset Host] Constructed local fallback public URL: ${localUrl}`);
+    return localUrl;
   } catch (err) {
     console.error("Error saving temp file:", err);
     return null;
