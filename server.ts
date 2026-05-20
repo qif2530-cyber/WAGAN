@@ -1335,12 +1335,19 @@ app.post(
                 if (img) {
                     img = img.replace(/^data:[^,]+,/, "");
                     submitBody.image = img;
-                    delete submitBody.aspect_ratio;
+                    if (klingVideoPath === "omni-video") {
+                        submitBody.first_image = img;
+                    } else {
+                        delete submitBody.aspect_ratio;
+                    }
                     
                     if (req.body.referenceImageTail || req.body.image_tail) {
                        let tail = req.body.referenceImageTail || req.body.image_tail;
                        tail = tail.replace(/^data:[^,]+,/, "");
                        submitBody.image_tail = tail;
+                       if (klingVideoPath === "omni-video") {
+                           submitBody.last_image = tail;
+                       }
                     }
                 }
              }
@@ -2138,16 +2145,25 @@ app.post(
             let vid = req.body.referenceVideo || req.body.video;
             vid = vid.replace(/^data:[^,]+,/, "");
             submitBody.video = vid;
-            delete submitBody.aspect_ratio;
+            if (klingVideoPath !== "omni-video") {
+                delete submitBody.aspect_ratio;
+            }
           } else if (req.body.referenceImage || req.body.image) {
             let img = req.body.referenceImage || req.body.image;
             img = img.replace(/^data:[^,]+,/, "");
             submitBody.image = img;
-            delete submitBody.aspect_ratio;
+            if (klingVideoPath === "omni-video") {
+                submitBody.first_image = img;
+            } else {
+                delete submitBody.aspect_ratio;
+            }
             if (req.body.referenceImageTail || req.body.image_tail) {
                let tail = req.body.referenceImageTail || req.body.image_tail;
                tail = tail.replace(/^data:[^,]+,/, "");
                submitBody.image_tail = tail;
+               if (klingVideoPath === "omni-video") {
+                   submitBody.last_image = tail;
+               }
             }
           }
         }

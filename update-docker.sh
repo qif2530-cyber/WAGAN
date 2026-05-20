@@ -9,8 +9,9 @@ echo "==================================="
 cd "$(dirname "$0")"
 
 echo "1. 正在拉取最新代码..."
-git reset --hard
-git pull
+git fetch --all
+git clean -fd
+git reset --hard origin/main
 
 echo "2. 检查旧版 docker-compose 兼容性并重新构建..."
 # 针对部分老版本 docker-compose 报 KeyError: 'ContainerConfig' 的情况
