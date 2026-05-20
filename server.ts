@@ -1321,34 +1321,75 @@ app.post(
              else if (req.body.videoResolution === "4k") submitBody.mode = "4k";
              // Optional configuration parameters (e.g. cfg_scale: 0.5) can be added here
              
-             if (klingVideoPath === "video2video" || (klingVideoPath === "omni-video" && (req.body.referenceVideo || req.body.video))) {
-                let vid = req.body.referenceVideo || req.body.video;
-                if (vid) {
-                    vid = vid.replace(/^data:[^,]+,/, "");
-                    submitBody.video = vid;
-                    delete submitBody.aspect_ratio;
-                }
-             }
-             
-             if (klingVideoPath === "image2video" || (klingVideoPath === "omni-video" && (req.body.referenceImage || req.body.image || req.body.image_url))) {
+             if (klingVideoPath === "omni-video") {
+                const hasPlaceholder = prompt && (prompt.includes("<<<image_") || prompt.includes("image_1") || prompt.includes("image_2"));
+                const hasTail = !!(req.body.referenceImageTail || req.body.image_tail);
+                const useFirstFrameType = !hasPlaceholder || hasTail;
+
+                const imageList: any[] = [];
                 let img = req.body.referenceImage || req.body.image || req.body.image_url;
                 if (img) {
                     img = img.replace(/^data:[^,]+,/, "");
-                    submitBody.image = img;
-                    if (klingVideoPath === "omni-video") {
-                        submitBody.first_image = img;
-                    } else {
+                    const imgObj: any = {
+                        image_url: img
+                    };
+                    if (useFirstFrameType) {
+                        imgObj.type = "first_frame";
+                    }
+                    imageList.push(imgObj);
+                    
+                    let tail = req.body.referenceImageTail || req.body.image_tail;
+                    if (tail) {
+                        tail = tail.replace(/^data:[^,]+,/, "");
+                        imageList.push({
+                            image_url: tail,
+                            type: "end_frame"
+                        });
+                    }
+                }
+                
+                if (imageList.length > 0) {
+                    submitBody.image_list = imageList;
+                    if (useFirstFrameType) {
                         delete submitBody.aspect_ratio;
                     }
-                    
-                    if (req.body.referenceImageTail || req.body.image_tail) {
-                       let tail = req.body.referenceImageTail || req.body.image_tail;
-                       tail = tail.replace(/^data:[^,]+,/, "");
-                       submitBody.image_tail = tail;
-                       if (klingVideoPath === "omni-video") {
-                           submitBody.last_image = tail;
+                }
+                
+                let vid = req.body.referenceVideo || req.body.video;
+                if (vid) {
+                    vid = vid.replace(/^data:[^,]+,/, "");
+                    submitBody.video_list = [
+                        {
+                            video_url: vid,
+                            refer_type: "base",
+                            keep_original_sound: "yes"
+                        }
+                    ];
+                    delete submitBody.aspect_ratio;
+                }
+             } else {
+                if (klingVideoPath === "video2video") {
+                   let vid = req.body.referenceVideo || req.body.video;
+                   if (vid) {
+                       vid = vid.replace(/^data:[^,]+,/, "");
+                       submitBody.video = vid;
+                       delete submitBody.aspect_ratio;
+                   }
+                }
+                
+                if (klingVideoPath === "image2video") {
+                   let img = req.body.referenceImage || req.body.image || req.body.image_url;
+                   if (img) {
+                       img = img.replace(/^data:[^,]+,/, "");
+                       submitBody.image = img;
+                       delete submitBody.aspect_ratio;
+                       
+                       if (req.body.referenceImageTail || req.body.image_tail) {
+                          let tail = req.body.referenceImageTail || req.body.image_tail;
+                          tail = tail.replace(/^data:[^,]+,/, "");
+                          submitBody.image_tail = tail;
                        }
-                    }
+                   }
                 }
              }
           }
@@ -2141,30 +2182,69 @@ app.post(
         }
 
         if (isKling) {
-          if (req.body.referenceVideo || req.body.video) {
-            let vid = req.body.referenceVideo || req.body.video;
-            vid = vid.replace(/^data:[^,]+,/, "");
-            submitBody.video = vid;
-            if (klingVideoPath !== "omni-video") {
-                delete submitBody.aspect_ratio;
-            }
-          } else if (req.body.referenceImage || req.body.image) {
-            let img = req.body.referenceImage || req.body.image;
-            img = img.replace(/^data:[^,]+,/, "");
-            submitBody.image = img;
-            if (klingVideoPath === "omni-video") {
-                submitBody.first_image = img;
-            } else {
-                delete submitBody.aspect_ratio;
-            }
-            if (req.body.referenceImageTail || req.body.image_tail) {
-               let tail = req.body.referenceImageTail || req.body.image_tail;
-               tail = tail.replace(/^data:[^,]+,/, "");
-               submitBody.image_tail = tail;
-               if (klingVideoPath === "omni-video") {
-                   submitBody.last_image = tail;
+          if (klingVideoPath === "omni-video") {
+             const hasPlaceholder = prompt && (prompt.includes("<<<image_") || prompt.includes("image_1") || prompt.includes("image_2"));
+             const hasTail = !!(req.body.referenceImageTail || req.body.image_tail);
+             const useFirstFrameType = !hasPlaceholder || hasTail;
+
+             const imageList: any[] = [];
+             let img = req.body.referenceImage || req.body.image;
+             if (img) {
+                 img = img.replace(/^data:[^,]+,/, "");
+                 const imgObj: any = {
+                     image_url: img
+                 };
+                 if (useFirstFrameType) {
+                     imgObj.type = "first_frame";
+                 }
+                 imageList.push(imgObj);
+                 
+                 let tail = req.body.referenceImageTail || req.body.image_tail;
+                 if (tail) {
+                     tail = tail.replace(/^data:[^,]+,/, "");
+                     imageList.push({
+                         image_url: tail,
+                         type: "end_frame"
+                     });
+                 }
+             }
+             
+             if (imageList.length > 0) {
+                 submitBody.image_list = imageList;
+                 if (useFirstFrameType) {
+                     delete submitBody.aspect_ratio;
+                 }
+             }
+             
+             let vid = req.body.referenceVideo || req.body.video;
+             if (vid) {
+                 vid = vid.replace(/^data:[^,]+,/, "");
+                 submitBody.video_list = [
+                     {
+                         video_url: vid,
+                         refer_type: "base",
+                         keep_original_sound: "yes"
+                     }
+                  ];
+                  delete submitBody.aspect_ratio;
+             }
+          } else {
+             if (req.body.referenceVideo || req.body.video) {
+               let vid = req.body.referenceVideo || req.body.video;
+               vid = vid.replace(/^data:[^,]+,/, "");
+               submitBody.video = vid;
+               delete submitBody.aspect_ratio;
+             } else if (req.body.referenceImage || req.body.image) {
+               let img = req.body.referenceImage || req.body.image;
+               img = img.replace(/^data:[^,]+,/, "");
+               submitBody.image = img;
+               delete submitBody.aspect_ratio;
+               if (req.body.referenceImageTail || req.body.image_tail) {
+                  let tail = req.body.referenceImageTail || req.body.image_tail;
+                  tail = tail.replace(/^data:[^,]+,/, "");
+                  submitBody.image_tail = tail;
                }
-            }
+             }
           }
         }
 
