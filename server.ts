@@ -942,6 +942,16 @@ app.post(
           req,
         );
 
+        recordDispatchLog(
+          true,
+          "/api/v1/generate",
+          model,
+          "Sora Video Generation Success",
+          req.body,
+          req,
+          { videoUrl: videoUrl || "", estimatedCostUsd }
+        );
+
         return res.json({
           success: true,
           videoUrl: videoUrl || "",
@@ -1054,6 +1064,17 @@ app.post(
             { imageCount: 1, resolution: "1024x1024" },
             req,
           );
+
+          recordDispatchLog(
+            true,
+            "/api/v1/generate",
+            model,
+            "Midjourney Proxy Task Success",
+            req.body,
+            req,
+            { imageUrl: finalUrl, estimatedCostUsd }
+          );
+
           return res.json({
             success: true,
             imageUrl: finalUrl,
@@ -1106,6 +1127,16 @@ app.post(
           req,
         );
 
+        recordDispatchLog(
+          true,
+          "/api/v1/generate",
+          model,
+          "Image Generation Success",
+          req.body,
+          req,
+          { imageUrl: finalImageUrl ? "Image Generated Successfully" : null, estimatedCostUsd }
+        );
+
         return res.json({
           success: true,
           imageUrl: finalImageUrl,
@@ -1149,6 +1180,16 @@ app.post(
         if (msgResponse?.reasoning_content) {
           textOut = `> **思考过程 (Reasoning):**\n> \n> ${msgResponse.reasoning_content.replace(/\n/g, "\n> ")}\n\n---\n\n${textOut}`;
         }
+
+        recordDispatchLog(
+          true,
+          "/api/v1/generate",
+          model,
+          "LLM Generation Success",
+          req.body,
+          req,
+          { text: textOut, estimatedCostUsd }
+        );
 
         return res.json({
           success: true,
@@ -1243,6 +1284,17 @@ app.post(
           { imageCount: 1, resolution: targetSize },
           req,
         );
+
+        recordDispatchLog(
+          true,
+          "/api/v1/generate",
+          model,
+          "Jimeng Image Generation Success",
+          req.body,
+          req,
+          { imageUrl: imageUrl || "", estimatedCostUsd }
+        );
+
         return res.json({
           success: true,
           imageUrl,
@@ -1620,6 +1672,17 @@ app.post(
           { resolution: "720p" },
           req,
         );
+
+        recordDispatchLog(
+          true,
+          "/api/v1/generate",
+          model,
+          "Kling/Jimeng Video Generation Success",
+          req.body,
+          req,
+          { videoUrl: finalVideoUrl, estimatedCostUsd }
+        );
+
         return res.json({
           success: true,
           videoUrl: finalVideoUrl,
@@ -1681,6 +1744,16 @@ app.post(
           prompt,
           { imageCount: 1, resolution: "2K" },
           req,
+        );
+
+        recordDispatchLog(
+          true,
+          "/api/v1/generate",
+          model,
+          "Gemini Image/Imagen Generation Success",
+          req.body,
+          req,
+          { imageUrl: rawBase64 ? "Image Bytes Generated Successfully" : null, estimatedCostUsd }
         );
 
         return res.json({

@@ -114,6 +114,65 @@ const MODEL_INFO: Record<string, { name: string, desc: string, docUrl: string, m
   }
 };
 
+function cropImageToBase64(base64Str: string, aspectStr: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!aspectStr || aspectStr === 'original') {
+      resolve(base64Str);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      let targetRatio = 1;
+      const parts = aspectStr.split(':');
+      if (parts.length === 2) {
+        targetRatio = parseFloat(parts[0]) / parseFloat(parts[1]);
+      } else {
+        targetRatio = parseFloat(aspectStr) || 1;
+      }
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(base64Str);
+        return;
+      }
+
+      const imgWidth = img.width;
+      const imgHeight = img.height;
+      const imgRatio = imgWidth / imgHeight;
+
+      let drawWidth = imgWidth;
+      let drawHeight = imgHeight;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (imgRatio > targetRatio) {
+        // Source image is wider than target ratio, crop sides (center crop)
+        drawWidth = imgHeight * targetRatio;
+        offsetX = (imgWidth - drawWidth) / 2;
+      } else {
+        // Source image is taller than target ratio, crop top/bottom (center crop)
+        drawHeight = imgWidth / targetRatio;
+        offsetY = (imgHeight - drawHeight) / 2;
+      }
+
+      // Max resolution width capped at 1280 to ensure extremely fast payload and upload
+      let canvasWidth = Math.min(drawWidth, 1280);
+      let canvasHeight = canvasWidth / targetRatio;
+
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+
+      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight, 0, 0, canvasWidth, canvasHeight);
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+    img.src = base64Str;
+  });
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<ApiType>('chat');
   
@@ -455,10 +514,18 @@ export default function App() {
       if (['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora', 'video'].includes(activeTab)) {
         payload.aspectRatio = aspectRatio;
         if (referenceImage) {
-          payload.referenceImage = referenceImage;
+          if (aspectRatio && aspectRatio !== 'original') {
+            payload.referenceImage = await cropImageToBase64(referenceImage, aspectRatio);
+          } else {
+            payload.referenceImage = referenceImage;
+          }
         }
         if (referenceImageTail) {
-          payload.referenceImageTail = referenceImageTail;
+          if (aspectRatio && aspectRatio !== 'original') {
+            payload.referenceImageTail = await cropImageToBase64(referenceImageTail, aspectRatio);
+          } else {
+            payload.referenceImageTail = referenceImageTail;
+          }
         }
         if (referenceVideo) {
           payload.referenceVideo = referenceVideo;
