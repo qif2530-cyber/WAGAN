@@ -86,12 +86,25 @@ function ensurePublicUrl(req: any, input: string | null | undefined): string | n
     const filePath = path.join(tempDir, fileName);
     fs.writeFileSync(filePath, Buffer.from(parsed.data, "base64"));
     
-    const host = req.get("host") || "";
-    // Check if we are running in the isolated, authenticated AI Studio sandbox environment (e.g., in previews)
-    const isSandboxedAiStudio = host.includes("ais-") || host.includes("run.app") || host.includes("google") || host.includes("localhost") || host.includes("127.0.0.1");
+    // Explicit environment variable override - the most bulletproof way for self-hosted setup
+    if (process.env.PUBLIC_APP_URL) {
+      const publicAppUrl = process.env.PUBLIC_APP_URL.trim().replace(/\/$/, "");
+      const overrodeUrl = `${publicAppUrl}/temp/${fileName}`;
+      console.log(`[Public Asset Host] Using PUBLIC_APP_URL environment override: ${overrodeUrl}`);
+      return overrodeUrl;
+    }
 
-    if (isSandboxedAiStudio) {
-      // Must use public host upload since sandbox is private and unreachable from outside.
+    // Smart host & protocol resolution to handle docker, reverse proxies, and ports correctly
+    const reqProtocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+    const host = req.headers["x-forwarded-host"] || req.headers["x-original-host"] || req.headers["host"] || req.get("host") || "";
+    
+    // Helper to determine if the resolved host is a local/sandboxed block that external APIs cannot access
+    const isSandboxedAiStudio = host.includes("ais-") || host.includes("run.app") || host.includes("google") || host.includes("github");
+    const isUnreachableLocal = host.includes("localhost") || host.includes("127.0.0.1") || host.includes("0.0.0.0") || host.includes("::1") || !host.includes(".");
+
+    if (isSandboxedAiStudio || isUnreachableLocal) {
+      console.log(`[Public Asset Host] Detected local/isolated environment (${host}). Uploading to a public host...`);
+      // Must use public host upload since sandbox/local is private and unreachable from outside.
       try {
         const uploadCmd = `curl -s -X POST -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@${filePath}" https://litterbox.catbox.moe/resources/internals/api.php`;
         const stdout = execSync(uploadCmd, { timeout: 15000 }).toString().trim();
@@ -107,14 +120,12 @@ function ensurePublicUrl(req: any, input: string | null | undefined): string | n
         console.warn("[Public Asset Host Error] Litterbox synchronous upload failed, falling back to local host:", uploadErr);
       }
     } else {
-      console.log(`[Public Asset Host] Server is running on a public host/IP (${host}), bypassing external hosting to avoid Great Firewall blocks.`);
+      console.log(`[Public Asset Host] Server detected a public host or IP (${host}), serving files directly from the container.`);
     }
 
     // Fallback or default for self-hosted setup (public IP/domain)
-    // Make sure to detect protocol properly (HTTP vs HTTPS)
-    const reqProtocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
     const localUrl = `${reqProtocol}://${host}/temp/${fileName}`;
-    console.log(`[Public Asset Host] Constructed local fallback public URL: ${localUrl}`);
+    console.log(`[Public Asset Host] Constructed public server URL: ${localUrl}`);
     return localUrl;
   } catch (err) {
     console.error("Error saving temp file:", err);
@@ -1551,6 +1562,7 @@ app.post(
         }
 
         console.log(`Sending ${isKling ? "Kling" : "Jimeng"} task to: ${submitUrl}`);
+        console.log(`[Unified Gateway] Task submission payload:`, JSON.stringify(submitBody, null, 2));
         const submitResponse = await fetch(submitUrl, {
           method: "POST",
           headers: {

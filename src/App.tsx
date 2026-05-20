@@ -116,71 +116,148 @@ const MODEL_INFO: Record<string, { name: string, desc: string, docUrl: string, m
 
 function cropImageToBase64(base64Str: string, aspectStr: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    if (!aspectStr || aspectStr === 'original') {
-      resolve(base64Str);
-      return;
-    }
     const img = new Image();
     img.onload = () => {
-      let targetRatio = 1;
+      let targetWidth = 1024;
+      let targetHeight = 1024;
+      let hasTarget = false;
+      const isOriginal = !aspectStr || aspectStr === 'original' || aspectStr === 'inherit';
+
+      if (isOriginal) {
+        // For original aspect ratio, preserve original size but align to multiples of 16, keeping within 1024 bound
+        const imgWidth = img.width || 1024;
+        const imgHeight = img.height || 1024;
+        const ratio = imgWidth / imgHeight;
+        const maxDim = 1024;
+
+        if (imgWidth > maxDim || imgHeight > maxDim) {
+          if (ratio >= 1) {
+            targetWidth = maxDim;
+            targetHeight = Math.round((maxDim / ratio) / 16) * 16;
+          } else {
+            targetHeight = maxDim;
+            targetWidth = Math.round((maxDim * ratio) / 16) * 16;
+          }
+        } else {
+          targetWidth = Math.round(imgWidth / 16) * 16;
+          targetHeight = Math.round(imgHeight / 16) * 16;
+        }
+
+        // Safeguard minimum boundary for Kling
+        if (targetWidth < 256) targetWidth = 256;
+        if (targetHeight < 256) targetHeight = 256;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(base64Str);
+          return;
+        }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, imgWidth, imgHeight, 0, 0, targetWidth, targetHeight);
+        
+        const result = canvas.toDataURL('image/jpeg', 0.9);
+        console.log(`[cropImageToBase64] Standardized original ratio image to perfect multiple-of-16 size: ${targetWidth}x${targetHeight}.`);
+        resolve(result);
+        return;
+      }
+
+      // Map exact standard resolutions matching Kling/Veo aspect ratios with perfect 16-pixel alignment
+      if (aspectStr === '16:9') {
+        targetWidth = 1280;
+        targetHeight = 720;
+        hasTarget = true;
+      } else if (aspectStr === '9:16') {
+        targetWidth = 720;
+        targetHeight = 1280;
+        hasTarget = true;
+      } else if (aspectStr === '1:1') {
+        targetWidth = 1024;
+        targetHeight = 1024;
+        hasTarget = true;
+      } else if (aspectStr === '4:3') {
+        targetWidth = 1024;
+        targetHeight = 768;
+        hasTarget = true;
+      } else if (aspectStr === '3:4') {
+        targetWidth = 768;
+        targetHeight = 1024;
+        hasTarget = true;
+      }
+
+      let ratio = 1;
       const parts = aspectStr.split(':');
       if (parts.length === 2) {
-        targetRatio = parseFloat(parts[0]) / parseFloat(parts[1]);
+        ratio = parseFloat(parts[0]) / parseFloat(parts[1]);
       } else {
-        targetRatio = parseFloat(aspectStr) || 1;
+        ratio = parseFloat(aspectStr) || 1;
+      }
+
+      if (!hasTarget) {
+        // Dynamic target size matching ratio, multiple of 16
+        if (ratio >= 1) {
+          targetWidth = 1024;
+          targetHeight = Math.round((1024 / ratio) / 16) * 16;
+        } else {
+          targetHeight = 1024;
+          targetWidth = Math.round((1024 * ratio) / 16) * 16;
+        }
+      }
+
+      // Safeguard boundaries
+      if (targetWidth < 256) targetWidth = 256;
+      if (targetHeight < 256) targetHeight = 256;
+
+      const imgWidth = img.width;
+      const imgHeight = img.height;
+      if (!imgWidth || !imgHeight) {
+        console.warn("[cropImageToBase64] Invalid image dimensions on load: ", imgWidth, imgHeight);
+        resolve(base64Str);
+        return;
+      }
+
+      const imgRatio = imgWidth / imgHeight;
+      const targetRatio = targetWidth / targetHeight;
+
+      let sourceX = 0;
+      let sourceY = 0;
+      let sourceWidth = imgWidth;
+      let sourceHeight = imgHeight;
+
+      if (imgRatio > targetRatio) {
+        // Source is wider than target. Crop sides center-wise.
+        sourceWidth = imgHeight * targetRatio;
+        sourceX = (imgWidth - sourceWidth) / 2;
+      } else {
+        // Source is taller than target. Crop top/bottom center-wise.
+        sourceHeight = imgWidth / targetRatio;
+        sourceY = (imgHeight - sourceHeight) / 2;
       }
 
       const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         resolve(base64Str);
         return;
       }
 
-      const imgWidth = img.width;
-      const imgHeight = img.height;
-      const imgRatio = imgWidth / imgHeight;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
 
-      let drawWidth = imgWidth;
-      let drawHeight = imgHeight;
-      let offsetX = 0;
-      let offsetY = 0;
-
-      if (imgRatio > targetRatio) {
-        // Source image is wider than target ratio, crop sides (center crop)
-        drawWidth = imgHeight * targetRatio;
-        offsetX = (imgWidth - drawWidth) / 2;
-      } else {
-        // Source image is taller than target ratio, crop top/bottom (center crop)
-        drawHeight = imgWidth / targetRatio;
-        offsetY = (imgHeight - drawHeight) / 2;
-      }
-
-      // Design max bounding box based on ratio to keep within Kling/Veo boundaries and keep payload light
-      let maxW = 1024;
-      let maxH = 1024;
-      if (targetRatio >= 1) {
-        maxW = 1280;
-        maxH = Math.round((1280 / targetRatio) / 16) * 16;
-      } else {
-        maxH = 1280;
-        maxW = Math.round((1280 * targetRatio) / 16) * 16;
-      }
-
-      // Ensure canvas dimensions are perfect integers and strictly multiples of 16
-      // (This avoids Kling's "Image pixel is invalid" error which occurs when input image dimensions aren't multiples of 8 or 16)
-      let canvasWidth = Math.round(Math.min(drawWidth, maxW) / 16) * 16;
-      if (canvasWidth < 256) canvasWidth = 256;
-      let canvasHeight = Math.round((canvasWidth / targetRatio) / 16) * 16;
-      if (canvasHeight < 256) canvasHeight = 256;
-
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight, 0, 0, canvasWidth, canvasHeight);
-      resolve(canvas.toDataURL('image/jpeg', 0.92));
+      ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight);
+      
+      const result = canvas.toDataURL('image/jpeg', 0.9);
+      console.log(`[cropImageToBase64] Successfully cropped to exact standard resolution ${targetWidth}x${targetHeight}.`);
+      resolve(result);
     };
-    img.onerror = () => {
+    img.onerror = (err) => {
+      console.error("[cropImageToBase64] Image load error: ", err);
       resolve(base64Str);
     };
     img.src = base64Str;
@@ -528,18 +605,10 @@ export default function App() {
       if (['image', 'dalle', 'midjourney', 'fluxpro', 'fluxmax', 'jimeng-image', 'jimeng-video', 'kling-video', 'sora', 'video'].includes(activeTab)) {
         payload.aspectRatio = aspectRatio;
         if (referenceImage) {
-          if (aspectRatio && aspectRatio !== 'original') {
-            payload.referenceImage = await cropImageToBase64(referenceImage, aspectRatio);
-          } else {
-            payload.referenceImage = referenceImage;
-          }
+          payload.referenceImage = await cropImageToBase64(referenceImage, aspectRatio || 'original');
         }
         if (referenceImageTail) {
-          if (aspectRatio && aspectRatio !== 'original') {
-            payload.referenceImageTail = await cropImageToBase64(referenceImageTail, aspectRatio);
-          } else {
-            payload.referenceImageTail = referenceImageTail;
-          }
+          payload.referenceImageTail = await cropImageToBase64(referenceImageTail, aspectRatio || 'original');
         }
         if (referenceVideo) {
           payload.referenceVideo = referenceVideo;
