@@ -1246,14 +1246,24 @@ app.post(
         }
 
         let klingVideoPath = "text2video";
-        if (isKling && (req.body.referenceVideo || req.body.video)) {
-            klingVideoPath = "video2video";
-        } else if (isKling && (req.body.referenceImage || req.body.image || req.body.image_url)) {
-            klingVideoPath = "image2video";
-        }
+        const hasRefMedia = !!(req.body.referenceVideo || req.body.video || req.body.referenceImage || req.body.image || req.body.image_url);
         
-        if (isKling && (model === "kling-v3-omni" || model === "kling-video-o1")) {
-            klingVideoPath = "omni-video";
+        if (isKling) {
+          if (req.body.referenceVideo || req.body.video) {
+              klingVideoPath = "video2video";
+          } else if (req.body.referenceImage || req.body.image || req.body.image_url) {
+              klingVideoPath = "image2video";
+          }
+          
+          if (model === "kling-v3-omni" || model === "kling-video-o1") {
+              if (hasRefMedia) {
+                  klingVideoPath = "omni-video";
+              } else {
+                  // Text-to-Video fallback
+                  klingVideoPath = "text2video";
+                  klingActualModelName = model === "kling-video-o1" ? "kling-v2" : "kling-v1-5";
+              }
+          }
         }
 
         submitUrl = isKling
@@ -1351,7 +1361,12 @@ app.post(
                 if (imageList.length > 0) {
                     submitBody.image_list = imageList;
                     if (useFirstFrameType) {
-                        delete submitBody.aspect_ratio;
+                        const userRatio = req.body.aspectRatio || req.body.aspect_ratio;
+                        if (!userRatio || userRatio === "original" || userRatio === "inherit") {
+                            delete submitBody.aspect_ratio;
+                        } else {
+                            submitBody.aspect_ratio = userRatio;
+                        }
                     }
                 }
                 
@@ -2110,14 +2125,24 @@ app.post(
         }
 
         let klingVideoPath = "text2video";
-        if (isKling && (req.body.referenceVideo || req.body.video)) {
-            klingVideoPath = "video2video";
-        } else if (isKling && (req.body.referenceImage || req.body.image)) {
-            klingVideoPath = "image2video";
-        }
-        
-        if (isKling && (model === "kling-v3-omni" || model === "kling-video-o1")) {
-            klingVideoPath = "omni-video";
+        const hasRefMedia = !!(req.body.referenceVideo || req.body.video || req.body.referenceImage || req.body.image || req.body.image_url);
+
+        if (isKling) {
+          if (req.body.referenceVideo || req.body.video) {
+              klingVideoPath = "video2video";
+          } else if (req.body.referenceImage || req.body.image || req.body.image_url) {
+              klingVideoPath = "image2video";
+          }
+
+          if (model === "kling-v3-omni" || model === "kling-video-o1") {
+              if (hasRefMedia) {
+                  klingVideoPath = "omni-video";
+              } else {
+                  // Text-to-Video fallback
+                  klingVideoPath = "text2video";
+                  klingActualModelName = model === "kling-video-o1" ? "kling-v2" : "kling-v1-5";
+              }
+          }
         }
 
         submitUrl = isKling
@@ -2212,7 +2237,12 @@ app.post(
              if (imageList.length > 0) {
                  submitBody.image_list = imageList;
                  if (useFirstFrameType) {
-                     delete submitBody.aspect_ratio;
+                     const userRatio = req.body.aspectRatio || req.body.aspect_ratio;
+                     if (!userRatio || userRatio === "original" || userRatio === "inherit") {
+                         delete submitBody.aspect_ratio;
+                     } else {
+                         submitBody.aspect_ratio = userRatio;
+                     }
                  }
              }
              
@@ -2348,8 +2378,9 @@ app.post(
             finalVideoUrl = resultVideoUrl;
             break;
           } else if (status === "FAILURE" || status === "failed") {
+            const errMsg = pollData.data?.task_status_msg || pollData.data?.task_status_desc || pollData.error_msg || pollData.error?.message || pollData.message || "任务状态异常";
             throw new Error(
-              `生成失败: ${pollData.error?.message || "任务状态异常"}`,
+              `生成失败: ${errMsg}`,
             );
           }
         }

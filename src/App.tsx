@@ -999,16 +999,19 @@ export default function App() {
                                   {((referenceImage && !['kling-v3-omni', 'kling-video-o1'].includes(selectedModel)) || referenceVideo) && <span className="ml-2 text-rose-500 font-normal normal-case">* 已上传参考图/视频，将强制继承原文件比例</span>}
                                 </label>
                                 <div className="flex flex-wrap gap-2">
-                                  {['1:1', '16:9', '9:16'].map((ratio) => {
+                                  {['1:1', '16:9', '9:16', 'original'].map((ratio) => {
                                     const isDisableRatio = (!!referenceVideo) || (!!referenceImage && !['kling-v3-omni', 'kling-video-o1'].includes(selectedModel));
+                                    const isDisabled = isDisableRatio && ratio !== 'original';
+                                    const isSelected = isDisableRatio ? ratio === 'original' : aspectRatio === ratio;
                                     return (
                                       <button
                                         key={ratio}
+                                        type="button"
                                         onClick={() => setAspectRatio(ratio)}
-                                        disabled={isDisableRatio}
-                                        className={`px-3 py-1.5 flex-grow text-xs rounded border transition-colors ${isDisableRatio ? 'opacity-40 cursor-not-allowed bg-transparent border-white/5 text-gray-600' : (aspectRatio === ratio ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 cursor-pointer' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30 cursor-pointer')}`}
+                                        disabled={isDisabled}
+                                        className={`px-3 py-1.5 flex-grow text-xs rounded border transition-colors ${isDisabled ? 'opacity-40 cursor-not-allowed bg-transparent border-white/5 text-gray-600' : (isSelected ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 cursor-pointer' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30 cursor-pointer')}`}
                                       >
-                                        {ratio}
+                                        {ratio === 'original' ? '原始比例 (Original)' : ratio}
                                       </button>
                                     );
                                   })}
