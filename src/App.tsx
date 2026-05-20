@@ -156,9 +156,23 @@ function cropImageToBase64(base64Str: string, aspectStr: string): Promise<string
         offsetY = (imgHeight - drawHeight) / 2;
       }
 
-      // Max resolution width capped at 1280 to ensure extremely fast payload and upload
-      let canvasWidth = Math.min(drawWidth, 1280);
-      let canvasHeight = canvasWidth / targetRatio;
+      // Design max bounding box based on ratio to keep within Kling/Veo boundaries and keep payload light
+      let maxW = 1024;
+      let maxH = 1024;
+      if (targetRatio >= 1) {
+        maxW = 1280;
+        maxH = Math.round((1280 / targetRatio) / 16) * 16;
+      } else {
+        maxH = 1280;
+        maxW = Math.round((1280 * targetRatio) / 16) * 16;
+      }
+
+      // Ensure canvas dimensions are perfect integers and strictly multiples of 16
+      // (This avoids Kling's "Image pixel is invalid" error which occurs when input image dimensions aren't multiples of 8 or 16)
+      let canvasWidth = Math.round(Math.min(drawWidth, maxW) / 16) * 16;
+      if (canvasWidth < 256) canvasWidth = 256;
+      let canvasHeight = Math.round((canvasWidth / targetRatio) / 16) * 16;
+      if (canvasHeight < 256) canvasHeight = 256;
 
       canvas.width = canvasWidth;
       canvas.height = canvasHeight;
