@@ -1001,19 +1001,22 @@ export default function App() {
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3">
                                 <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">
                                   图片/视频比例 (Aspect Ratio)
-                                  {(referenceImage || referenceVideo) && <span className="ml-2 text-rose-500 font-normal normal-case">* 已上传参考图/视频，将强制继承原文件比例</span>}
+                                  {((referenceImage && !['kling-v3-omni', 'kling-video-o1'].includes(selectedModel)) || referenceVideo) && <span className="ml-2 text-rose-500 font-normal normal-case">* 已上传参考图/视频，将强制继承原文件比例</span>}
                                 </label>
                                 <div className="flex flex-wrap gap-2">
-                                  {['1:1', '16:9', '9:16', '4:3', '3:4'].map((ratio) => (
-                                    <button
-                                      key={ratio}
-                                      onClick={() => setAspectRatio(ratio)}
-                                      disabled={!!referenceImage || !!referenceVideo}
-                                      className={`px-3 py-1.5 flex-grow text-xs rounded border transition-colors ${(referenceImage || referenceVideo) ? 'opacity-40 cursor-not-allowed bg-transparent border-white/5 text-gray-600' : (aspectRatio === ratio ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 cursor-pointer' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30 cursor-pointer')}`}
-                                    >
-                                      {ratio}
-                                    </button>
-                                  ))}
+                                  {['1:1', '16:9', '9:16', '4:3', '3:4'].map((ratio) => {
+                                    const isDisableRatio = (!!referenceVideo) || (!!referenceImage && !['kling-v3-omni', 'kling-video-o1'].includes(selectedModel));
+                                    return (
+                                      <button
+                                        key={ratio}
+                                        onClick={() => setAspectRatio(ratio)}
+                                        disabled={isDisableRatio}
+                                        className={`px-3 py-1.5 flex-grow text-xs rounded border transition-colors ${isDisableRatio ? 'opacity-40 cursor-not-allowed bg-transparent border-white/5 text-gray-600' : (aspectRatio === ratio ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 cursor-pointer' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 hover:border-white/30 cursor-pointer')}`}
+                                      >
+                                        {ratio}
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}

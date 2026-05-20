@@ -1324,7 +1324,8 @@ app.post(
              if (klingVideoPath === "omni-video") {
                 const hasPlaceholder = prompt && (prompt.includes("<<<image_") || prompt.includes("image_1") || prompt.includes("image_2"));
                 const hasTail = !!(req.body.referenceImageTail || req.body.image_tail);
-                const useFirstFrameType = !hasPlaceholder || hasTail;
+                const hasExplicitRatio = !!(req.body.aspectRatio || req.body.aspect_ratio);
+                const useFirstFrameType = (!hasPlaceholder || hasTail) && !hasExplicitRatio;
 
                 const imageList: any[] = [];
                 let img = req.body.referenceImage || req.body.image || req.body.image_url;
@@ -2185,7 +2186,8 @@ app.post(
           if (klingVideoPath === "omni-video") {
              const hasPlaceholder = prompt && (prompt.includes("<<<image_") || prompt.includes("image_1") || prompt.includes("image_2"));
              const hasTail = !!(req.body.referenceImageTail || req.body.image_tail);
-             const useFirstFrameType = !hasPlaceholder || hasTail;
+             const hasExplicitRatio = !!(req.body.aspectRatio || req.body.aspect_ratio);
+             const useFirstFrameType = (!hasPlaceholder || hasTail) && !hasExplicitRatio;
 
              const imageList: any[] = [];
              let img = req.body.referenceImage || req.body.image;
