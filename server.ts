@@ -9,6 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import compression from "compression";
 import crypto from "crypto";
+import { execSync } from "child_process";
 
 function generateKlingJwt(ak: string, sk: string) {
   const header = { alg: "HS256", typ: "JWT" };
@@ -85,6 +86,23 @@ function ensurePublicUrl(req: any, input: string | null | undefined): string | n
     const filePath = path.join(tempDir, fileName);
     fs.writeFileSync(filePath, Buffer.from(parsed.data, "base64"));
     
+    // Attempt real public upload to Litterbox so that external video/image generation APIs (like Kling)
+    // can access the resource, since our own Dev/Pre preview domain requires Google authenticated session.
+    try {
+      const uploadCmd = `curl -s -X POST -F "reqtype=fileupload" -F "time=1h" -F "fileToUpload=@${filePath}" https://litterbox.catbox.moe/resources/internals/api.php`;
+      const stdout = execSync(uploadCmd, { timeout: 15000 }).toString().trim();
+      if (stdout && stdout.startsWith("https://")) {
+        console.log(`[Public Asset Host] Successfully uploaded to Litterbox (valid for 1h): ${stdout}`);
+        // Remove local file to avoid server storage buildup
+        try { fs.unlinkSync(filePath); } catch (u) {}
+        return stdout;
+      } else {
+        console.warn(`[Public Asset Host Warning] Litterbox responded with non-url: ${stdout}`);
+      }
+    } catch (uploadErr) {
+      console.warn("[Public Asset Host Error] Litterbox synchronous upload failed, falling back to local host:", uploadErr);
+    }
+
     const protocol = req.headers["x-forwarded-proto"] || "https";
     const host = req.get("host");
     return `${protocol}://${host}/temp/${fileName}`;
