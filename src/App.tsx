@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 // Git sync patch applied
-import { Copy, Check, Terminal, FileCode, Coffee, Play, Image as ImageIcon, MessageSquare, Video, Info, AlertTriangle, ExternalLink, Bot, Server, Shield, Download, Trash2, Plus, Upload, Search } from 'lucide-react';
+import { Copy, Check, Terminal, FileCode, Coffee, Play, Image as ImageIcon, MessageSquare, Video, Info, AlertTriangle, ExternalLink, Bot, Server, Shield, Download, Trash2, Plus, Upload, Search, Activity } from 'lucide-react';
 import { KLING_MODELS, KlingMode } from './lib/kling-models';
 
 const CodeBlock = ({ title, code }: { title: string, code: string }) => {
@@ -133,7 +133,7 @@ export default function App() {
   const [imageSize, setImageSize] = useState('1K'); // 增加正式的 state 绑定
   const [videoResolution, setVideoResolution] = useState('720p');
   const [videoDuration, setVideoDuration] = useState(5);
-  const [klingMode, setKlingMode] = useState<KlingMode>('std');
+  const [klingMode, setKlingMode] = useState<KlingMode>('pro');
   const [referenceVideoDuration, setReferenceVideoDuration] = useState(5);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceImageName, setReferenceImageName] = useState<string | null>(null);
@@ -148,6 +148,7 @@ export default function App() {
 
   const [billingLogs, setBillingLogs] = useState<any[]>([]);
   const [errorLogs, setErrorLogs] = useState<any[]>([]);
+  const [monitoringSubTab, setMonitoringSubTab] = useState<'billing' | 'logs'>('billing');
   const [ipWhitelist, setIpWhitelist] = useState<string>('');
   const [adminGeminiKey, setAdminGeminiKey] = useState<string>('');
   const [adminOpenaiKey, setAdminOpenaiKey] = useState<string>('');
@@ -655,15 +656,9 @@ export default function App() {
             </button>
             <button
               onClick={() => changeTab('billing' as any)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'billing' as any ? 'bg-yellow-500/15 text-yellow-400 font-medium border border-yellow-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${(activeTab === 'billing' as any || activeTab === 'error-logs' as any) ? 'bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
             >
-              <Coffee className="w-4 h-4" /> 测试账单监控
-            </button>
-            <button
-              onClick={() => changeTab('error-logs' as any)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${activeTab === 'error-logs' as any ? 'bg-indigo-500/15 text-indigo-400 font-medium border border-indigo-500/20' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}
-            >
-              <AlertTriangle className="w-4 h-4" /> 调度监控日志
+              <Activity className="w-4 h-4" /> 调度监控系统
             </button>
             <button
               onClick={() => changeTab('settings' as any)}
@@ -1004,7 +999,7 @@ export default function App() {
                                   {((referenceImage && !['kling-v3-omni', 'kling-video-o1'].includes(selectedModel)) || referenceVideo) && <span className="ml-2 text-rose-500 font-normal normal-case">* 已上传参考图/视频，将强制继承原文件比例</span>}
                                 </label>
                                 <div className="flex flex-wrap gap-2">
-                                  {['1:1', '16:9', '9:16', '4:3', '3:4'].map((ratio) => {
+                                  {['1:1', '16:9', '9:16'].map((ratio) => {
                                     const isDisableRatio = (!!referenceVideo) || (!!referenceImage && !['kling-v3-omni', 'kling-video-o1'].includes(selectedModel));
                                     return (
                                       <button
@@ -1110,7 +1105,12 @@ export default function App() {
                                  return (
                                    <>
                                       <div className="bg-black/30 border border-white/5 rounded-lg p-3 md:col-span-2">
-                                         <label className="block text-[10px] font-medium text-gray-400 mb-2 uppercase tracking-wider">选择模式: {config.name}</label>
+                                         <div className="flex justify-between items-center mb-2">
+                                           <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider">选择模式: {config.name}</label>
+                                           {['kling-video-o1', 'kling-v3-omni'].includes(selectedModel) && (
+                                             <span className="text-[10px] text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/10 animate-pulse">✨ 推荐使用 PRO 专家模式（解决卡顿/帧率不足问题）</span>
+                                           )}
+                                         </div>
                                          <div className="flex flex-wrap gap-2">
                                            {modes.map((m) => {
                                               const feature = config.modes[m]!;
@@ -1131,17 +1131,41 @@ export default function App() {
                                             <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider">生成时长 (Video Duration)</label>
                                             <span className="text-xs text-indigo-400 font-mono">{videoDuration}s</span>
                                           </div>
-                                          <div className="flex gap-2">
-                                            {features.allowedDurations.map((duration) => (
-                                              <button
-                                                key={duration}
-                                                onClick={() => setVideoDuration(duration)}
-                                                className={`flex-1 py-1.5 text-xs rounded border transition-colors cursor-pointer ${videoDuration === duration ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-transparent border-white/10 text-gray-500 hover:text-gray-300 outline-none'}`}
-                                              >
-                                                {duration} 秒
-                                              </button>
-                                            ))}
-                                          </div>
+                                           {/* Precision Range Slider */}
+                                           <div className="my-4 px-1">
+                                             <input 
+                                               type="range" 
+                                               min="3" 
+                                               max="15" 
+                                               step="1" 
+                                               value={videoDuration < 3 ? 5 : (videoDuration > 15 ? 15 : videoDuration)} 
+                                               onChange={(e) => setVideoDuration(Number(e.target.value))}
+                                               className="w-full h-1.5 rounded bg-neutral-800 accent-emerald-400 cursor-pointer appearance-none outline-none border border-white/5"
+                                             />
+                                             <div className="flex justify-between text-[8px] text-gray-500 font-mono mt-1.5">
+                                               <span>3秒 (极速)</span>
+                                               <span>5秒 (推荐)</span>
+                                               <span>8秒</span>
+                                               <span>10秒</span>
+                                               <span>12秒</span>
+                                               <span>15秒 (最长)</span>
+                                             </div>
+                                           </div>
+
+                                           {/* Quick selectors row */}
+                                           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/5">
+                                             <span className="text-[9px] text-gray-500 mr-1 uppercase font-mono">快速一键:</span>
+                                             {[3, 5, 8, 10, 12, 15].map((duration) => (
+                                               <button
+                                                 key={duration}
+                                                 type="button"
+                                                 onClick={() => setVideoDuration(duration)}
+                                                 className={`px-2 py-0.5 text-[10px] rounded border transition-colors cursor-pointer ${videoDuration === duration ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 font-medium' : 'bg-transparent border-white/10 text-gray-400 hover:text-gray-200 outline-none'}`}
+                                               >
+                                                 {duration}秒
+                                               </button>
+                                             ))}
+                                           </div>
                                       </div>
                                       <div className="bg-black/30 border border-white/5 rounded-lg p-3 md:col-span-2 flex flex-wrap gap-2 text-[10px] text-gray-400">
                                           <span className="bg-white/5 px-2 py-1 rounded">M2V: {config.supportedTaskTypes.includes('m2v') ? '✅' : '❌'}</span>
@@ -1383,21 +1407,48 @@ echo $result;
           ) : activeTab === 'billing' as any ? (
             /* Billing / Log View */
             <div className="animate-in fade-in duration-300 pb-10 pr-8">
-              <div className="flex justify-between items-end mb-8">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8 border-b border-white/5 pb-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-                    <Coffee className="w-8 h-8 text-yellow-500" />
-                    网关消费流水 (Billing Logs)
+                  <h2 className="text-3xl font-bold text-white mb-1.5 flex items-center gap-3">
+                    <Activity className="w-8 h-8 text-emerald-400" />
+                    调度监控系统 (Scheduling & Monitoring)
                   </h2>
-                  <p className="text-gray-400 text-sm">记录了您发出的全量请求。此处为依据大厂公开计费单推算的预估消耗。</p>
+                  <p className="text-gray-400 text-xs md:text-sm">统一监控全量请求的网关消费流水、API 状态与官方底层调度日志。</p>
                 </div>
                 
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-6 py-4 text-right shadow-lg">
-                  <div className="text-yellow-500/80 text-xs font-bold uppercase mb-1">当前实例平台总账单 (Total Cost)</div>
-                  <div className="text-2xl font-mono font-bold text-yellow-400">
-                    ${Math.max(0, billingLogs.reduce((sum, log) => sum + (log.estimatedCostUsd || 0), 0)).toFixed(6)}
+                {/* Total Stats indicators */}
+                <div className="flex gap-4">
+                  <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-2 text-right">
+                    <div className="text-emerald-500/60 text-[10px] font-bold uppercase mb-0.5 font-sans">预计平台总账单 (Est. Cost)</div>
+                    <div className="text-lg font-mono font-bold text-emerald-400">
+                      ${Math.max(0, billingLogs.reduce((sum, log) => sum + (log.estimatedCostUsd || 0), 0)).toFixed(6)}
+                    </div>
+                  </div>
+                  <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-xl px-4 py-2 text-right">
+                    <div className="text-indigo-500/60 text-[10px] font-bold uppercase mb-0.5 font-sans">调度日志总计 (Total Logs)</div>
+                    <div className="text-lg font-mono font-bold text-indigo-400">
+                      {errorLogs.length} 条
+                    </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Sub-Tabs Switcher */}
+              <div className="flex space-x-1 p-1 bg-black/30 border border-white/5 rounded-xl w-fit mb-8 shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => changeTab('billing' as any)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs md:text-sm font-medium transition-all cursor-pointer bg-emerald-500/15 text-emerald-400 shadow-md border border-emerald-500/10 font-bold"
+                >
+                  <Coffee className="w-4 h-4" /> 📊 账单消费流水 (Billing)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeTab('error-logs' as any)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs md:text-sm font-medium transition-all cursor-pointer text-gray-400 hover:text-white hover:bg-white/5"
+                >
+                  <AlertTriangle className="w-4 h-4" /> ⚠️ 调度监控日志 (Dispatch)
+                </button>
               </div>
 
               {/* 模型使用量统计 */}
@@ -1481,20 +1532,48 @@ echo $result;
           ) : activeTab === 'error-logs' as any ? (
             /* Error Logs View */
             <div className="animate-in fade-in duration-300 pb-10 pr-8">
-              <div className="flex justify-between items-end mb-8">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8 border-b border-white/5 pb-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-                    <AlertTriangle className="w-8 h-8 text-indigo-500" />
-                    调度排查与监控 (Dispatch Logs)
+                  <h2 className="text-3xl font-bold text-white mb-1.5 flex items-center gap-3">
+                    <Activity className="w-8 h-8 text-emerald-400" />
+                    调度监控系统 (Scheduling & Monitoring)
                   </h2>
-                  <p className="text-gray-400 text-sm">记录了调用各大厂 API 及下游平台的成功和失败记录，包含官方提示词和系统参数等。</p>
+                  <p className="text-gray-400 text-xs md:text-sm">统一监控全量请求的网关消费流水、API 状态与官方底层调度日志。</p>
                 </div>
-                <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl px-6 py-4 text-right shadow-lg">
-                  <div className="text-indigo-500/80 text-xs font-bold uppercase mb-1">日志总计 (Total Logs)</div>
-                  <div className="text-2xl font-mono font-bold text-indigo-400">
-                    {errorLogs.length} 条
+                
+                {/* Total Stats indicators */}
+                <div className="flex gap-4">
+                  <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-2 text-right">
+                    <div className="text-emerald-500/60 text-[10px] font-bold uppercase mb-0.5 font-sans">预计平台总账单 (Est. Cost)</div>
+                    <div className="text-lg font-mono font-bold text-emerald-400">
+                      ${Math.max(0, billingLogs.reduce((sum, log) => sum + (log.estimatedCostUsd || 0), 0)).toFixed(6)}
+                    </div>
+                  </div>
+                  <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-xl px-4 py-2 text-right">
+                    <div className="text-indigo-500/60 text-[10px] font-bold uppercase mb-0.5 font-sans">调度日志总计 (Total Logs)</div>
+                    <div className="text-lg font-mono font-bold text-indigo-400">
+                      {errorLogs.length} 条
+                    </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Sub-Tabs Switcher */}
+              <div className="flex space-x-1 p-1 bg-black/30 border border-white/5 rounded-xl w-fit mb-8 shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => changeTab('billing' as any)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs md:text-sm font-medium transition-all cursor-pointer text-gray-400 hover:text-white hover:bg-white/5"
+                >
+                  <Coffee className="w-4 h-4" /> 📊 账单消费流水 (Billing)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeTab('error-logs' as any)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs md:text-sm font-medium transition-all cursor-pointer bg-indigo-500/15 text-indigo-400 shadow-md border border-indigo-500/10 font-bold"
+                >
+                  <AlertTriangle className="w-4 h-4" /> ⚠️ 调度监控日志 (Dispatch)
+                </button>
               </div>
 
               <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
