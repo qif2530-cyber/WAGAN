@@ -57,6 +57,43 @@ function parseDataUri(dataUri: string) {
   return { mimeType: "image/jpeg", data: dataUri.replace(/\s+/g, "") };
 }
 
+// Ensure temp folder exists for hosting base64 images/videos to public URLs
+const tempDir = path.join(process.cwd(), "temp");
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// Convert base64 data to public URL if it starts with data: or is base64
+function ensurePublicUrl(req: any, input: string | null | undefined): string | null {
+  if (!input) return null;
+  // If it's already an HTTP/HTTPS URL, return it
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    return input;
+  }
+  
+  try {
+    const parsed = parseDataUri(input);
+    let ext = "jpg";
+    if (parsed.mimeType.includes("png")) ext = "png";
+    else if (parsed.mimeType.includes("webp")) ext = "webp";
+    else if (parsed.mimeType.includes("gif")) ext = "gif";
+    else if (parsed.mimeType.includes("mp4")) ext = "mp4";
+    else if (parsed.mimeType.includes("webm")) ext = "webm";
+    else if (parsed.mimeType.includes("mov")) ext = "mov";
+
+    const fileName = `${crypto.randomUUID()}.${ext}`;
+    const filePath = path.join(tempDir, fileName);
+    fs.writeFileSync(filePath, Buffer.from(parsed.data, "base64"));
+    
+    const protocol = req.headers["x-forwarded-proto"] || "https";
+    const host = req.get("host");
+    return `${protocol}://${host}/temp/${fileName}`;
+  } catch (err) {
+    console.error("Error saving temp file:", err);
+    return null;
+  }
+}
+
 // Lazy initialization of Gemini API
 // If user provides a custom key in the request, use it. Otherwise use the runtime key.
 let runtimeGeminiKey =
@@ -253,6 +290,7 @@ function isWhitelisted(req: express.Request): boolean {
 app.use(compression()); // 启用 GZIP 压缩大幅减少底图响应数据体积！
 app.use(express.json({ limit: "50mb" })); // Increased limit for base64 images
 app.use(cors());
+app.use("/temp", express.static(path.join(process.cwd(), "temp")));
 
 // ==========================================
 // 防御攻击与限流层 (Anti-DDoS & Rate Limiting)
@@ -1339,7 +1377,7 @@ app.post(
                 const imageList: any[] = [];
                 let img = req.body.referenceImage || req.body.image || req.body.image_url;
                 if (img) {
-                    img = img.replace(/^data:[^,]+,/, "");
+                    img = ensurePublicUrl(req, img) || img;
                     const imgObj: any = {
                         image_url: img
                     };
@@ -1350,7 +1388,7 @@ app.post(
                     
                     let tail = req.body.referenceImageTail || req.body.image_tail;
                     if (tail) {
-                        tail = tail.replace(/^data:[^,]+,/, "");
+                        tail = ensurePublicUrl(req, tail) || tail;
                         imageList.push({
                             image_url: tail,
                             type: "end_frame"
@@ -1372,7 +1410,7 @@ app.post(
                 
                 let vid = req.body.referenceVideo || req.body.video;
                 if (vid) {
-                    vid = vid.replace(/^data:[^,]+,/, "");
+                    vid = ensurePublicUrl(req, vid) || vid;
                     submitBody.video_list = [
                         {
                             video_url: vid,
@@ -1386,7 +1424,7 @@ app.post(
                 if (klingVideoPath === "video2video") {
                    let vid = req.body.referenceVideo || req.body.video;
                    if (vid) {
-                       vid = vid.replace(/^data:[^,]+,/, "");
+                       vid = ensurePublicUrl(req, vid) || vid;
                        submitBody.video = vid;
                        delete submitBody.aspect_ratio;
                    }
@@ -1395,13 +1433,13 @@ app.post(
                 if (klingVideoPath === "image2video") {
                    let img = req.body.referenceImage || req.body.image || req.body.image_url;
                    if (img) {
-                       img = img.replace(/^data:[^,]+,/, "");
+                       img = ensurePublicUrl(req, img) || img;
                        submitBody.image = img;
                        delete submitBody.aspect_ratio;
                        
                        if (req.body.referenceImageTail || req.body.image_tail) {
                           let tail = req.body.referenceImageTail || req.body.image_tail;
-                          tail = tail.replace(/^data:[^,]+,/, "");
+                          tail = ensurePublicUrl(req, tail) || tail;
                           submitBody.image_tail = tail;
                        }
                    }
@@ -2213,9 +2251,9 @@ app.post(
              const useFirstFrameType = !hasPlaceholder || hasTail;
 
              const imageList: any[] = [];
-             let img = req.body.referenceImage || req.body.image;
+             let img = req.body.referenceImage || req.body.image || req.body.image_url;
              if (img) {
-                 img = img.replace(/^data:[^,]+,/, "");
+                 img = ensurePublicUrl(req, img) || img;
                  const imgObj: any = {
                      image_url: img
                  };
@@ -2224,9 +2262,9 @@ app.post(
                  }
                  imageList.push(imgObj);
                  
-                 let tail = req.body.referenceImageTail || req.body.image_tail;
+                 let tail = req.body.referenceImageTail || req.body.image_tail || req.body.image_tail_url;
                  if (tail) {
-                     tail = tail.replace(/^data:[^,]+,/, "");
+                     tail = ensurePublicUrl(req, tail) || tail;
                      imageList.push({
                          image_url: tail,
                          type: "end_frame"
@@ -2246,9 +2284,9 @@ app.post(
                  }
              }
              
-             let vid = req.body.referenceVideo || req.body.video;
+             let vid = req.body.referenceVideo || req.body.video || req.body.video_url;
              if (vid) {
-                 vid = vid.replace(/^data:[^,]+,/, "");
+                 vid = ensurePublicUrl(req, vid) || vid;
                  submitBody.video_list = [
                      {
                          video_url: vid,
@@ -2259,19 +2297,19 @@ app.post(
                   delete submitBody.aspect_ratio;
              }
           } else {
-             if (req.body.referenceVideo || req.body.video) {
-               let vid = req.body.referenceVideo || req.body.video;
-               vid = vid.replace(/^data:[^,]+,/, "");
+             if (req.body.referenceVideo || req.body.video || req.body.video_url) {
+               let vid = req.body.referenceVideo || req.body.video || req.body.video_url;
+               vid = ensurePublicUrl(req, vid) || vid;
                submitBody.video = vid;
                delete submitBody.aspect_ratio;
-             } else if (req.body.referenceImage || req.body.image) {
-               let img = req.body.referenceImage || req.body.image;
-               img = img.replace(/^data:[^,]+,/, "");
+             } else if (req.body.referenceImage || req.body.image || req.body.image_url) {
+               let img = req.body.referenceImage || req.body.image || req.body.image_url;
+               img = ensurePublicUrl(req, img) || img;
                submitBody.image = img;
                delete submitBody.aspect_ratio;
-               if (req.body.referenceImageTail || req.body.image_tail) {
-                  let tail = req.body.referenceImageTail || req.body.image_tail;
-                  tail = tail.replace(/^data:[^,]+,/, "");
+               if (req.body.referenceImageTail || req.body.image_tail || req.body.image_tail_url) {
+                  let tail = req.body.referenceImageTail || req.body.image_tail || req.body.image_tail_url;
+                  tail = ensurePublicUrl(req, tail) || tail;
                   submitBody.image_tail = tail;
                }
              }
