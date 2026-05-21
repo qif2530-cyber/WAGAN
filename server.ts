@@ -329,6 +329,105 @@ function isWhitelisted(req: express.Request): boolean {
 app.use(compression()); // 启用 GZIP 压缩大幅减少底图响应数据体积！
 app.use(express.json({ limit: "50mb" })); // Increased limit for base64 images
 app.use(cors());
+
+// ==========================================
+// 1.1 统一网关中转转发中间件 (Universal Gateway Forwarder Control)
+// ==========================================
+// 如果在 .env 里配置了 EXTERNAL_GATEWAY_URL, 就会自动把所有的 API 请求透明地转发给新加坡等真实的统一超级网关主机。
+// 这解决了国内阿里云、腾讯云等服务器因为 GFW 网络阻断，或是没有绑定密钥，而无法直接和 Kling/Jimeng/OpenAI/Gemini 握手连接的问题。
+app.use(async (req, res, next) => {
+  if (!process.env.EXTERNAL_GATEWAY_URL) {
+    return next();
+  }
+
+  // 除非是本地健康检查和静态资源，其他所有 /api/ 和 /v1/ 路由统统无感中转到新加坡主网关
+  const isLocalOnly = req.path === "/api/health" || req.path.startsWith("/temp/");
+  if (isLocalOnly) {
+    return next();
+  }
+
+  const shouldForward = req.path.startsWith("/api/") || req.path.startsWith("/v1/");
+  if (!shouldForward) {
+    return next();
+  }
+
+  const gatewayUrl = process.env.EXTERNAL_GATEWAY_URL.trim().replace(/\/$/, "");
+  const targetUrl = `${gatewayUrl}${req.originalUrl}`;
+
+  console.log(`[新加坡网关调度中转] ${req.method} ${req.originalUrl} ➡️ ${targetUrl}`);
+
+  try {
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (value && typeof value === "string") {
+        headers[key] = value;
+      } else if (Array.isArray(value)) {
+        headers[key] = value.join(", ");
+      }
+    }
+
+    // 抹除或重新匹配宿主头，避免部分反向代理报错 400
+    delete headers["host"];
+    delete headers["content-length"];
+
+    const fetchOptions: any = {
+      method: req.method,
+      headers,
+    };
+
+    if (["POST", "PUT", "PATCH"].includes(req.method) && req.body) {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+
+    const response = await fetch(targetUrl, fetchOptions);
+
+    // 将上游返回的状态码和头部传递回前端
+    res.status(response.status);
+    response.headers.forEach((value, name) => {
+      const lowerName = name.toLowerCase();
+      if (!["connection", "keep-alive", "transfer-encoding", "content-encoding"].includes(lowerName)) {
+        res.setHeader(name, value);
+      }
+    });
+
+    // 保持流式输出：如果是 SSE 流式对话，则开启边下边读的模式
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("text/event-stream") || (response.body && typeof (response.body as any).pipe === "function")) {
+      console.log(`[新加坡网关调度中转] 正在以流式（Stream/SSE）向前端输送结果...`);
+      if (response.body) {
+        if (typeof (response.body as any).pipe === "function") {
+          (response.body as any).pipe(res);
+        } else {
+          const reader = (response.body as any).getReader();
+          const streamFinished = async () => {
+             while (true) {
+               const { done, value } = await reader.read();
+               if (done) break;
+               res.write(value);
+             }
+             res.end();
+          };
+          await streamFinished();
+        }
+      } else {
+        res.end();
+      }
+    } else {
+      // 正常一次性 JSON 或者图片/视频文件 buffer 响应
+      const buffer = await response.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    }
+  } catch (err: any) {
+    console.error(`[新加坡网关调度中转失败] 无法连通：`, err);
+    res.status(502).json({
+      success: false,
+      error: "新加坡网关节点连接失败 (Singapore Gateway Connection Timeout)",
+      detail: `您的网站无法连接至新加坡网关（${process.env.EXTERNAL_GATEWAY_URL}）。请检查新加坡网关实例的防火墙安全组 3000 端口是否已对公网放行。`,
+      message: err.message,
+    });
+  }
+});
+
 app.use("/temp", express.static(path.join(process.cwd(), "temp")));
 
 // ==========================================
@@ -1385,13 +1484,8 @@ app.post(
           }
           
           if (model === "kling-v3-omni" || model === "kling-video-o1") {
-              if (hasRefMedia) {
-                  klingVideoPath = "omni-video";
-              } else {
-                  // Text-to-Video fallback
-                  klingVideoPath = "text2video";
-                  klingActualModelName = model === "kling-video-o1" ? "kling-v2" : "kling-v1-5";
-              }
+              klingVideoPath = "omni-video";
+              klingActualModelName = model;
           }
         }
 
@@ -2286,13 +2380,8 @@ app.post(
           }
 
           if (model === "kling-v3-omni" || model === "kling-video-o1") {
-              if (hasRefMedia) {
-                  klingVideoPath = "omni-video";
-              } else {
-                  // Text-to-Video fallback
-                  klingVideoPath = "text2video";
-                  klingActualModelName = model === "kling-video-o1" ? "kling-v2" : "kling-v1-5";
-              }
+              klingVideoPath = "omni-video";
+              klingActualModelName = model;
           }
         }
 
